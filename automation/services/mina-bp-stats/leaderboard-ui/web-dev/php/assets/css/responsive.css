@@ -1,0 +1,593 @@
+@media not all and (min-resolution:.001dpcm)
+{ @supports (-webkit-appearance:none) and (stroke-color:transparent) {
+
+    .delegationButton.nav-link.active,
+    .delegationButton .show>.nav-link{
+      line-height: 10px;
+    }
+    .form-control.mb-2.mt-2.search-box  {
+        line-height: 11px;
+    }
+    .pagination>.page-item>.page-link {
+        line-height: 16px;
+    }
+    a.page-link  {
+        line-height: 12px;
+    }
+    .table td  {
+        line-height: 48px;
+    }
+    
+    .pagination.mr-3.mt-1.p-2.d-none.d-md-block{
+        margin-top: 0px!important;
+    }
+    .mina-banner{
+        width: 100%;
+        background-size: cover;
+        background-image: url(../images/AnnouncementBanner.webp);
+        box-sizing: border-box;
+        height: 40px;
+        padding: 0 2.5rem;
+    }
+
+}}
+
+@media screen and (max-width: 600px) {
+    .delegationButton.nav-link.active,
+    .delegationButton .show>.nav-link{
+      text-align : center;
+      align-items: center;
+      vertical-align: middle;
+    }
+    .form-control.mb-2.mt-2.search-box  {
+        text-align : center;
+        align-items: center;
+        vertical-align: middle;
+    }
+    a.page-link  {
+        text-align : center;
+        align-items: center;
+        vertical-align: middle;
+    }
+    .table td  {
+        text-align : center;
+        align-items: center;
+        vertical-align: middle;
+    }
+
+    .minalogo{
+        /* margin-left:-57px;
+        margin-top:-30px; */
+        margin-bottom: 50px!important;
+    }
+    
+}
+
+/* @media screen and (max-width: 767px) {
+    .mina-delegation-links{
+        margin-bottom: 80px;
+    }
+} */
+  
+
+@media (max-width: 410px) {
+    .mina-banner{
+        height: 52px;
+        padding: 3px 2.5rem;
+    }
+    .bannerAnnouncement{
+        line-height: 1.5rem;
+    }
+}
+@media (max-width: 575.98px) {
+    .container {
+        width: 91%;
+        margin-right: 10px;
+        margin-left: 15px;
+        align-content: center;
+    }
+    .performance-Container {
+        margin-right: 0px;
+        margin-left: 0px;
+        padding-right: 0px;
+        padding-left: 0px;
+
+    }
+    /* for delegation policy */
+    .row>p {
+        text-align: justify;
+    }
+    .h1,
+    h1 {
+        font-size: 2.0rem;
+        text-align: center;
+    }
+    .toggle-button {
+        display: flex;
+    }
+    .No-colaps {
+        display: flex;
+    }
+    .navbar-nav {
+        flex-direction: row;
+        justify-content: space-around;
+    }
+    /* leader Board Responcive */
+    .Link-responcive>.row {
+        justify-content: left;
+    }
+    .Link-responcive>.row>.ml-auto
+    {
+        margin-left: 0px!important
+    }
+    .Responcive-Bottom-Padding>.topButton {
+        margin-bottom: 0rem!important;
+    }
+    .topButton {
+        margin-bottom: 0rem!important;
+    }
+    .topButton>.ml-auto {
+        margin-left: 0rem!important;
+    }
+    .table td+td+td {
+        margin-left: 0px!important;
+        padding-left: 0px!important;
+        text-align: center;
+    }
+    .table thead th {
+        vertical-align: middle;
+    }
+    .text-left {
+        text-align: unset!important;
+    }
+    /* Performance Tracker Responcive Css */
+    .performance-Container {
+        width: auto!important;
+    }
+    .mina-top-right-button {
+        margin-left: unset!important;
+    }
+    .Responcive-Bottom-Padding>.Link-responcive {
+        margin-bottom: 3rem!important;
+    }
+    .subheader>p {
+        font-size: 24px;
+        line-height: 35px;
+        text-align: center;
+        margin-bottom:50px ;
+    }
+    .performance-Container>.responcive-tab>.row {
+        display: flex;
+        flex-direction: column;
+    }
+    .row>a.mr-3 {
+        margin-right: 0rem!important;
+    }
+    .bottom-plate-tab {
+        display: none!important;
+    }
+    /* .right-box {
+        width: 257px;
+    } */
+    .delegation-Bottom-Button>.bottomPlate {
+        left: 4px!important;
+        top: -47px;
+        width: 231px;
+    }
+    .delegation-Bottom-Button>.delegationButton {
+        height: 46px;
+        left: 5px!important;
+        top: -32px;
+    }
+    .policyInfo-Bottom-Button>.bottomPlate {
+        left: 4px!important;
+        top: -47px;
+        width: 231px;
+    }
+    .policyInfo-Bottom-Button>.delegationButton {
+        height: 46px;
+        left: 5px!important;
+        top: -32px;
+    }
+    .table td {
+        font-size: 18px;
+        line-height: 27px;
+        color: #000000;
+        text-align: center;
+    }
+    /* for Image to Design */
+    .Margin-right-for-text {
+        margin-right: 38rem;
+    }
+    .wrap {
+        margin: 18vh auto ;
+    }
+    .Mobile-Tab-view{
+        display: block;
+        margin-bottom: 5px!important;
+        
+        
+        
+    }
+    .container.pr-0.pl-0.mt-0.mb-5.tab-content{
+        margin-top: 20px!important;
+    }
+    .pagination {
+        margin-top: -170px!important;
+        margin-bottom: 50px!important;
+        margin-left: 8px!important;
+    }
+    .pagination>li.ml-5{
+        margin-left: 1rem!important;
+    }
+    .performance-Container>.justify-content-end {
+        justify-content: center!important;
+    }
+    .minabg{
+        padding-bottom: 0px;
+        height: 700px;
+
+    }
+}
+
+@media (min-width: 576px) {
+    .toggle-button {
+        display: flex;
+    }
+    .No-colaps {
+        display: flex;
+    }
+    .navbar-nav {
+        flex-direction: row;
+        justify-content: space-around;
+    }
+    /* leader Board Responcive */
+    .table td+td+td {
+        margin-left: 0px!important;
+        padding-left: 0px!important;
+        text-align: center;
+    }
+    .table thead th {
+        vertical-align: middle;
+    }
+    .text-left {
+        text-align: unset!important;
+    }
+    .Link-responcive>.row {
+        justify-content: center;
+    }
+    .Link-responcive>.row>.ml-auto
+     {
+        margin-left: 0px!important
+    }
+    .delegationButton {
+        transform: translate(-50%, -50%);
+        position: absolute;
+        left: 50%;
+        display: block;
+        text-align: center;
+        
+    }
+    .delegationButton.nav-link.active,
+    .delegationButton .show>.nav-link{
+        text-align: center;
+        vertical-align: middle;
+    }
+    .search-box{
+        text-align: center;
+        vertical-align: middle;
+    }
+    a.page-link{
+        text-align: center;
+        vertical-align: middle;
+    }
+    .table td{
+        text-align: center;
+        vertical-align: middle;
+    }
+    .topButton>.bottomPlate {
+        left: 50%;
+        top: 0px;
+        transform: translate(-50%, -50%);
+        position: absolute;
+    }
+    .topButton {
+        margin-bottom: 3rem!important;
+    }
+    .left-box,.right-box{
+        width: 532px!important;
+    }
+    .bottom-plate-tab {
+        left: 0px;
+        display: none!important;
+    }
+    .pagination {
+        margin-top: -170px!important;
+        margin-bottom: 50px!important;
+    
+    }
+    /* .container.pr-0.pl-0.mt-0.mb-5.tab-content{
+        margin-top: 20px!important;
+    } */
+    .mina-subheader-text {
+        justify-content: center;
+    }
+    .performance-Container>.justify-content-end {
+        justify-content: center!important;
+    }
+
+}
+/* // Medium devices (tablets, 768px and up) */
+
+@media (min-width: 768px) {
+    .container {
+        width: 100%;
+    }
+    .toggle-button {
+        display: flex;
+    }
+    .No-colaps {
+        display: flex;
+    }
+    .navbar-nav {
+        flex-direction: row;
+        justify-content: space-around;
+    }
+    .delegationButton {
+        transform: unset!important;
+        position:relative!important;
+        left: unset!important;
+        display: unset!important;
+        text-align: center;
+    }
+    /* .search-box{
+        text-align: center;
+    }
+    a.page-link{
+        text-align: center;
+    }
+    .table td{
+        text-align: center;
+    } */
+    .delegationButton.nav-link.active,
+    .delegationButton .show>.nav-link{
+      text-align : center;
+      align-items: center;
+      vertical-align: middle;
+    }
+    .form-control.mb-2.mt-2.search-box  {
+        text-align : center;
+        align-items: center;
+        vertical-align: middle;
+    }
+    a.page-link  {
+        text-align : center;
+        align-items: center;
+        vertical-align: middle;
+    }
+    .table td  {
+        text-align : center;
+        align-items: center;
+        vertical-align: middle;
+    }
+    /* performance Tracker  */
+    .topButton>.bottomPlate {
+        left: 50%;
+        top: 0px;
+        transform: unset!important;
+        position: absolute;
+    }
+    #bottomPlate.topButton>.bottomPlate.for-normal-screen {
+        left: 4px!important;
+        top: -47px!important;
+        transform: unset!important;
+        position: unset!important;
+    }
+    .topButton>.bottomPlate.for-normal {
+        left: 4px!important;
+        top: -47px!important;
+        transform: unset!important;
+        position: relative!important;
+    }
+    .mina-top-right-button {
+        margin-left: 11rem!important;
+    }
+    .wrap {
+        margin: 18vh auto ;
+    }
+    .left-box, .right-box {
+        width: 712px!important;
+    }
+    .mina-subheader-text {
+        justify-content: center;
+    }
+}
+/* // Large devices (desktops, 992px and up) */
+
+@media (min-width: 992px) {
+    .container {
+        width: 90%;
+    }
+    /* for delegation policy */
+    .mr-5,
+    .mx-5 {
+        margin-right: 20rem!important;
+    }
+    .toggle-button {
+        display: none;
+    }
+    /* for delegation policy */
+    .delegationButton {
+        transform: unset!important;
+        position:relative!important;
+        left: unset!important;
+        display: unset!important;
+        text-align: center;
+    }
+    /* .search-box{
+        text-align: center;
+    }
+    a.page-link{
+        text-align: center;
+    }
+    .table td{
+        text-align: center;
+    } */
+    .delegationButton.nav-link.active,
+    .delegationButton .show>.nav-link{
+      text-align : center;
+      align-items: center;
+      vertical-align: middle;
+    }
+    .form-control.mb-2.mt-2.search-box  {
+        text-align : center;
+        align-items: center;
+        vertical-align: middle;
+    }
+    a.page-link  {
+        text-align : center;
+        align-items: center;
+        vertical-align: middle;
+    }
+    .table td  {
+        text-align : center;
+        align-items: center;
+        vertical-align: middle;
+    }
+    /* performance Tracker  */
+    .topButton>.bottomPlate {
+        left: 50%;
+        top: 0px;
+        transform: unset!important;
+        position: absolute;
+    }
+    .mina-top-right-button {
+        margin-left: 15rem!important;
+    }
+    .left-box, .right-box {
+        width: 846px!important;
+    }
+}
+/* // Extra large devices (large desktops, 1200px and up) */
+
+@media (min-width: 1200px) {
+    .container {
+        width: 100%;
+    }
+    /* for delegation policy */
+    .mr-5,
+    .mx-5 {
+        margin-right: 35rem!important;
+    }
+    /* leader Board Responcive */
+    .Link-responcive>.row {
+        justify-content: unset!important;
+    }
+    .Link-responcive>.row>.ml-auto{
+        margin-left: auto!important
+    }
+    .delegationButton {
+        transform: unset!important;
+        position:relative!important;
+        left: unset!important;
+        display: unset!important;
+        text-align: center;
+    }
+    /* .search-box{
+        text-align: center;
+    }
+    a.page-link{
+        text-align: center;
+    }
+    .table td{
+        text-align: center;
+    } */
+    .delegationButton.nav-link.active,
+    .delegationButton .show>.nav-link{
+      text-align : center;
+      align-items: center;
+      vertical-align: middle;
+    }
+    .form-control.mb-2.mt-2.search-box  {
+        text-align : center;
+        align-items: center;
+        vertical-align: middle;
+    }
+    a.page-link  {
+        text-align : center;
+        align-items: center;
+        vertical-align: middle;
+    }
+    .table td  {
+        text-align : center;
+        align-items: center;
+        vertical-align: middle;
+    }
+    .topButton>.bottomPlate {
+        left: 4px!important;
+        top: -47px!important;
+        transform: unset!important;
+        position: relative!important;
+    }
+    .topButton {
+        margin-bottom: unset!important;
+    }
+    .table td+td+td {
+        margin-left: 0px!important;
+        padding-left: 0px!important;
+        text-align: center;
+    }
+    .table thead th {
+        vertical-align: middle;
+    }
+    .text-left {
+        text-align: left!important;
+    }
+    /* Performance Tracker Responcive Css */
+    .Responcive-Bottom-Padding>.Link-responcive {
+        margin-bottom: unset!important;
+    }
+    .mina-top-right-button {
+        margin-left: 29rem!important;
+        ;
+    }
+    .Performace-track>.mina-top-right-button {
+        margin-left: 21rem!important;
+        ;
+    }
+    .row>a.mr-3 {
+        margin-right: 1rem!important;
+    }
+    .Responcive-Bottom-Padding>.topButton {
+        margin-bottom: 3rem!important;
+    }
+    .performance-Container>.row {
+        display: flex;
+        flex-direction: unset!important;
+    }
+    .bottom-plate-tab {
+        display: block!important;
+        width: 1130px!important;
+    }
+    .left-box, .right-box {
+        width: 324px!important;
+    }
+    .wrap {
+        margin: 21vh auto 180vh ;
+    }
+    .pagination {
+        margin-top: -155px!important;
+        margin-bottom: 50px!important;
+        
+    }
+    /* .container.pr-0.pl-0.mt-0.mb-5.tab-content{
+        margin-top: 20px!important;
+    } */
+    
+    .justify-content-center{
+        justify-content: center!important;
+    }
+    .performance-Container>.justify-content-end {
+        justify-content: flex-end!important;
+    }
+}
