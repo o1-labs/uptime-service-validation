@@ -33,7 +33,6 @@ def get_validate_state_hash(batch_file_list, combine_list):
             json_output = json.loads(line.decode("utf-8"))
             if "state_hash" in json_output:
                 output_list.append(json_output)
-                print (json_output)
             else:
                 # logger.info(json_output)
                 output_list.append(default_json_data)
