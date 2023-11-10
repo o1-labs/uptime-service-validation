@@ -1,8 +1,0 @@
-kubernetes
-python-dotenv
-slackclient
-boto3
-pandas
-networkx
-matplotlib
-psycopg2

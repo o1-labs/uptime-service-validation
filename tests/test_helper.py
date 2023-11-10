@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from helper import pullFileNames, getTimeBatches
+from uptime_service_validation.coordinator.helper import pullFileNames, getTimeBatches
 import pytest
 
 # The folloiwng two tests will fail as I have not given an accurate bucket name.
