@@ -1,5 +1,8 @@
 kubernetes
 python-dotenv
 slackclient
+boto3
+pandas
+networkx
+matplotlib
 psycopg2
-boto3 == 1.29
