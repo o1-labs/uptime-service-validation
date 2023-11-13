@@ -1,11 +1,11 @@
 import os
+import boto3
 from cassandra.cluster import Cluster
 from ssl import SSLContext, CERT_REQUIRED, PROTOCOL_TLS_CLIENT
-import boto3
 from cassandra_sigv4.auth import SigV4AuthProvider
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, ByteString
+from typing import Optional, ByteString, List
 
 
 @dataclass
@@ -78,7 +78,9 @@ class AWSKeyspacesClient:
         else:
             return self.session.execute(query)
 
-    def get_blocks(self, limit=None, block_hash=None):
+    def get_blocks(
+        self, limit: Optional[int] = None, block_hash: Optional[str] = None
+    ) -> List[Block]:
         base_query = f"SELECT block_hash, raw_block FROM {self.aws_keyspace}.blocks"
 
         if block_hash:
@@ -100,11 +102,11 @@ class AWSKeyspacesClient:
 
     def get_submissions(
         self,
-        limit=None,
-        submitted_at_date=None,
-        submitted_at_start=None,
-        submitted_at_end=None,
-    ):
+        limit: Optional[int] = None,
+        submitted_at_date: Optional[str] = None,
+        submitted_at_start: Optional[datetime] = None,
+        submitted_at_end: Optional[datetime] = None,
+    ) -> List[Submission]:
         base_query = f"SELECT submitted_at_date, submitted_at, submitter, created_at, block_hash, remote_addr, peer_id, snark_work, graphql_control_port, built_with_commit_sha, state_hash, parent, height, slot, validation_error FROM {self.aws_keyspace}.submissions"
 
         # For storing conditions and corresponding parameters
@@ -132,7 +134,6 @@ class AWSKeyspacesClient:
             query += f" LIMIT {limit}"
 
         # Executing the query with parameters
-        print(query)
         results = self.execute_query(query, parameters)
 
         # Mapping results to Submission dataclass instances
@@ -169,7 +170,8 @@ if __name__ == "__main__":
         client.connect()
         print("All blocks:")
         all_blocks = client.get_blocks()
-        print(all_blocks)
+        for block in all_blocks:
+            print(block.block_hash)
 
         print("Specific block:")
         specific_block = client.get_blocks(
@@ -190,8 +192,8 @@ if __name__ == "__main__":
         print("Specific submissions:")
         submissions = client.get_submissions(
             submitted_at_date="2023-11-09",
-            submitted_at_start="2023-11-09 14:30:00",
-            submitted_at_end="2023-11-09 14:59:59",
+            submitted_at_start=datetime(2023, 11, 9, 14, 30, 0),
+            submitted_at_end=datetime(2023, 11, 9, 15, 0, 0),
         )
         for submission in submissions:
             print(submission.submitter, submission.submitted_at)
