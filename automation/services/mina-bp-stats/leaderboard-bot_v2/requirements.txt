@@ -1,5 +1,0 @@
-kubernetes
-python-dotenv
-slackclient
-psycopg2
-boto3 = 1.29
