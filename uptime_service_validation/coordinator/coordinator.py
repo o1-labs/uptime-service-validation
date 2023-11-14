@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 import pandas as pd
 from time import time
 from helper import *
+from aws_keyspaces_client import AWSKeyspacesClient
 
 # Configure logging
 logging.basicConfig(
@@ -69,9 +70,24 @@ def main():
             jobs = []
             setUpValidatorPods(time_intervals, jobs, logging, worker_image, worker_tag)
             end = time()
-            # The jobs will have written their output to a database -which we now need to read from.
-            # We need to read the ZKValidator results from a db.
-            # Step 4 checks for forks and writes to the db.
+            # Step 4 We need to read the ZKValidator results from a db.
+            logging.info(
+                "reading ZKValidator results from a db between the time range: {0} - {1}".format(
+                    prev_batch_end, cur_batch_end
+                )
+            )
+            submissions = []
+            cassandra = AWSKeyspacesClient()
+            try:
+                cassandra.connect()
+                submissions = cassandra.get_submissions(
+                    submitted_at_start=prev_batch_end,
+                    submitted_at_end=cur_batch_end,
+                )
+            finally:
+                cassandra.close()
+
+            # Step 5 checks for forks and writes to the db.
             if not state_hash_df.empty:
                 master_df["state_hash"] = state_hash_df["state_hash"]
                 master_df["blockchain_height"] = state_hash_df["height"]
