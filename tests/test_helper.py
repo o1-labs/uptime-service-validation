@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta
-from uptime_service_validation.coordinator.helper import pullFileNames, getTimeBatches
-import pytest
+from uptime_service_validation.coordinator.helper import (
+    pullFileNames,
+    getTimeBatches,
+)
 
 # The folloiwng two tests will fail as I have not given an accurate bucket name.
 # def testFilePullSmallRange(self):
