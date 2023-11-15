@@ -83,6 +83,8 @@ def main():
                 submissions = cassandra.get_submissions(
                     submitted_at_start=prev_batch_end,
                     submitted_at_end=cur_batch_end,
+                    start_inclusive=True,
+                    end_inclusive=False,
                 )
             finally:
                 cassandra.close()
