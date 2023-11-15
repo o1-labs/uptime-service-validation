@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, ByteString, List
 
+import pandas as pd
+
 
 @dataclass
 class Submission:
@@ -100,29 +102,76 @@ class AWSKeyspacesClient:
         ]
         return blocks
 
+    # get list of submitted_at_date in the form of [YYYY-MM-DD]
+    # submitted_at_date is needed, along with start_date and end_date, as input to get list of submissions from Cassandra AWS Keyspace
+    @staticmethod
+    def get_submitted_at_date_list(
+        start_date: datetime, end_date: datetime
+    ) -> List[str]:
+        submitted_at_date_start = start_date.date()
+        submitted_at_date_end = end_date.date()
+        if submitted_at_date_start == submitted_at_date_end:
+            submitted_at_dates = [submitted_at_date_start.strftime("%Y-%m-%d")]
+        else:
+            submitted_at_dates = (
+                pd.date_range(submitted_at_date_start, submitted_at_date_end)
+                .map(lambda x: x.date().strftime("%Y-%m-%d"))
+                .to_list()
+            )
+        return submitted_at_dates
+
     def get_submissions(
         self,
         limit: Optional[int] = None,
-        submitted_at_date: Optional[str] = None,
         submitted_at_start: Optional[datetime] = None,
         submitted_at_end: Optional[datetime] = None,
+        start_inclusive: bool = True,
+        end_inclusive: bool = False,
     ) -> List[Submission]:
+        # you have to provide either both submitted_at_start and submitted_at_end or neither
+        if (submitted_at_start and not submitted_at_end) or (
+            not submitted_at_start and submitted_at_end
+        ):
+            raise ValueError(
+                "You have to provide either both submitted_at_start and submitted_at_end or neither"
+            )
+
         base_query = f"SELECT submitted_at_date, submitted_at, submitter, created_at, block_hash, remote_addr, peer_id, snark_work, graphql_control_port, built_with_commit_sha, state_hash, parent, height, slot, validation_error FROM {self.aws_keyspace}.submissions"
 
         # For storing conditions and corresponding parameters
         conditions = []
         parameters = []
 
-        # Adding conditions based on provided parameters
-        if submitted_at_date:
-            conditions.append("submitted_at_date = %s")
-            parameters.append(submitted_at_date)
-        if submitted_at_start:
-            conditions.append("submitted_at >= %s")
-            parameters.append(submitted_at_start)
-        if submitted_at_end:
-            conditions.append("submitted_at <= %s")
-            parameters.append(submitted_at_end)
+        # Getting submitted_at_date list
+        if submitted_at_start and submitted_at_end:
+            submitted_at_date_list = self.get_submitted_at_date_list(
+                submitted_at_start, submitted_at_end
+            )
+
+            if len(submitted_at_date_list) == 1:
+                submitted_at_date = submitted_at_date_list[0]
+            else:
+                submitted_at_date = None
+                submitted_at_dates = ",".join(
+                    [
+                        f"'{submitted_at_date}'"
+                        for submitted_at_date in submitted_at_date_list
+                    ]
+                )
+            # Adding conditions based on provided parameters
+            if submitted_at_date:
+                conditions.append("submitted_at_date = %s")
+                parameters.append(submitted_at_date)
+            elif submitted_at_dates:
+                conditions.append(f"submitted_at_date IN ({submitted_at_dates})")
+            if submitted_at_start:
+                start_operator = ">=" if start_inclusive else ">"
+                conditions.append(f"submitted_at {start_operator} %s")
+                parameters.append(submitted_at_start)
+            if submitted_at_end:
+                end_operator = "<=" if end_inclusive else "<"
+                conditions.append(f"submitted_at {end_operator} %s")
+                parameters.append(submitted_at_end)
 
         # Constructing the final query
         if conditions:
@@ -170,32 +219,42 @@ if __name__ == "__main__":
         client.connect()
         print("All blocks:")
         all_blocks = client.get_blocks()
-        for block in all_blocks:
-            print(block.block_hash)
+        print("Number of blocks:", len(all_blocks))
+        print()
 
         print("Specific block:")
         specific_block = client.get_blocks(
             block_hash="YnmzigsYK5tiybax6LT9c2NyVxEPd6or5aqbQG5mZWnbMZrxGX"
         )
         print(specific_block[0].block_hash)
+        print()
 
         print("Four blocks:")
         four_blocks = client.get_blocks(limit=4)
         for block in four_blocks:
             print(block.block_hash)
+        print()
 
         print("All submissions:")
         submissions = client.get_submissions()
-        for submission in submissions:
-            print(submission.submitter, submission.submitted_at)
+        print("Number of submissions:", len(submissions))
+        print()
 
         print("Specific submissions:")
+        start = datetime(2023, 11, 9, 16, 2, 0)
+        end = datetime(2023, 11, 14, 13, 26, 10)
         submissions = client.get_submissions(
-            submitted_at_date="2023-11-09",
-            submitted_at_start=datetime(2023, 11, 9, 14, 30, 0),
-            submitted_at_end=datetime(2023, 11, 9, 15, 0, 0),
+            submitted_at_start=start,
+            submitted_at_end=end,
+            start_inclusive=True,
+            end_inclusive=False,
         )
         for submission in submissions:
-            print(submission.submitter, submission.submitted_at)
+            print(submission.submitter, submission.submitted_at, submission.block_hash)
+        print(
+            "Number of submissions between '%s' and '%s': %s"
+            % (start, end, len(submissions))
+        )
+
     finally:
         client.close()
