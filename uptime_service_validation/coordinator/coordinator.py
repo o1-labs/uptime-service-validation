@@ -10,6 +10,7 @@ import pandas as pd
 from time import time
 from helper import *
 from aws_keyspaces_client import AWSKeyspacesClient
+from dataclasses import asdict
 
 # Configure logging
 logging.basicConfig(
@@ -58,7 +59,6 @@ def main():
             return
         else:
             master_df = pd.DataFrame()
-            state_hash_df = pd.DataFrame()
             # Step 2 Create time ranges:
             time_intervals = getTimeBatches(
                 prev_batch_end, cur_batch_end, os.environ["MINI_BATCH_NUMBER"]
@@ -90,6 +90,8 @@ def main():
                 cassandra.close()
 
             # Step 5 checks for forks and writes to the db.
+            state_hash_df = pd.DataFrame([asdict(submission) for submission in submissions])
+
             if not state_hash_df.empty:
                 master_df["state_hash"] = state_hash_df["state_hash"]
                 master_df["blockchain_height"] = state_hash_df["height"]
