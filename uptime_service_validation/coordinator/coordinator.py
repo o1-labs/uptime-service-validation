@@ -1,7 +1,6 @@
 import os
 import logging
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from kubernetes import client, config
+from kubernetes import config
 from server import setUpValidatorPods
 from datetime import datetime, timedelta, timezone
 import psycopg2
@@ -227,7 +226,6 @@ def main():
             else:
                 logging.info("Finished processing data from table.")
             try:
-                # The following needs to change.
                 updateScoreboard(
                     connection, cur_batch_end, int(os.environ["UPTIME_DAYS_FOR_SCORE"])
                 )
