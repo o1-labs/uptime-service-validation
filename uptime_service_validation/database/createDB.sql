@@ -111,15 +111,4 @@ CREATE TABLE score_history (
 );
 CREATE UNIQUE INDEX uq_sh_node_score_at ON score_history USING btree (node_id, score_at);
 
-
-DROP TABLE IF EXISTS zk_validator;
-CREATE TABLE zk_validator (
-	id SERIAL PRIMARY KEY,
-	name_of_file CHARACTER VARYING NOT NULL, 
-	state_hash CHARACTER VARYING NULL,
-	parent_hash CHARACTER VARYING NULL,
-	height BIGINT NOT NULL DEFAULT 0, 
-	slot BIGINT NOT NULL DEFAULT 0 
-);
 -- Point Summary table that is auto-gen?
--- Looks like there's an apoch table as well, but can't find much detail.

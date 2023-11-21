@@ -55,3 +55,11 @@ To connect to AWS Keyspaces, the following environment variables need to be set:
 - `AWS_SSL_CERTIFICATE_PATH` - The path to your SSL certificate for AWS Keyspaces.
 
 > 🗒️ **Note:** For convenience, an SSL certificate is provided in this repository and can be found at [/uptime_service_validation/database/aws_keyspaces/cert/sf-class2-root.crt](/uptime_service_validation/database/aws_keyspaces/cert/sf-class2-root.crt). Alternatively, the certificate can also be downloaded directly from AWS. Detailed instructions for obtaining the certificate are available in the AWS Keyspaces documentation, which you can access [here](https://docs.aws.amazon.com/keyspaces/latest/devguide/using_python_driver.html#using_python_driver.BeforeYouBegin).
+
+### Deployment
+
+The program needs:
+* The tables set up (see createDB.sql)
+* The .env file set up
+* Install dependencies (poetry install)
+* Execute coordinator.py
