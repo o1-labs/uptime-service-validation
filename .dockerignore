@@ -1,0 +1,14 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env
+.venv
+venv
+ENV
+build
+dist
+*.egg-info
+.installed.cfg
+*.egg
