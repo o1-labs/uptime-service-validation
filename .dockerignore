@@ -12,3 +12,4 @@ dist
 *.egg-info
 .installed.cfg
 *.egg
+_old
