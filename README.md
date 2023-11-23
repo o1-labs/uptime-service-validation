@@ -95,8 +95,6 @@ docker run -e SURVEY_INTERVAL_MINUTES=20 \
            uptime-service-validation
 ```
 
-
-
 ## Deployment
 
 The program needs:
