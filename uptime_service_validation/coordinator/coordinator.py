@@ -10,23 +10,34 @@ from dotenv import load_dotenv
 from time import time
 from dataclasses import asdict
 from uptime_service_validation.coordinator.helper import *
-from uptime_service_validation.coordinator.server import setUpValidatorPods
+from uptime_service_validation.coordinator.server import (
+    setUpValidatorPods,
+    setUpValidatorProcesses,
+)
 from uptime_service_validation.coordinator.aws_keyspaces_client import (
     AWSKeyspacesClient,
 )
 
-logging.basicConfig(
-    stream=sys.stdout,
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
 
-# Load the in-cluster configuration
-config.load_incluster_config()
+def test_env():
+    test = os.environ["TEST_ENV"]
+    if test == "1":
+        return True
+    else:
+        return False
 
 
 def main():
     load_dotenv()
+
+    logging.basicConfig(
+        stream=sys.stdout,
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+    # Load the in-cluster configuration only if not test environment
+    if not test_env():
+        config.load_incluster_config()
 
     connection = psycopg2.connect(
         host=os.environ["POSTGRES_HOST"],
@@ -70,7 +81,15 @@ def main():
             worker_tag = (os.environ["WORKER_TAG"],)
             start = time()
             jobs = []
-            setUpValidatorPods(time_intervals, jobs, logging, worker_image, worker_tag)
+            if test_env():
+                logging.info("running in test environment")
+                setUpValidatorProcesses(
+                    time_intervals, logging, worker_image, worker_tag
+                )
+            else:
+                setUpValidatorPods(
+                    time_intervals, jobs, logging, worker_image, worker_tag
+                )
             end = time()
             # Step 4 We need to read the ZKValidator results from a db.
             logging.info(
