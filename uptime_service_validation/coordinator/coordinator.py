@@ -1,20 +1,22 @@
+import sys
 import os
 import logging
-from kubernetes import config
-from server import setUpValidatorPods
-from datetime import datetime, timedelta, timezone
-import psycopg2
-from dotenv import load_dotenv
-import pandas as pd
-from time import time
-from helper import *
-from aws_keyspaces_client import AWSKeyspacesClient
-from dataclasses import asdict
 import calendar
+import pandas as pd
+import psycopg2
+from kubernetes import config
+from datetime import datetime, timedelta, timezone
+from dotenv import load_dotenv
+from time import time
+from dataclasses import asdict
+from uptime_service_validation.coordinator.helper import *
+from uptime_service_validation.coordinator.server import setUpValidatorPods
+from uptime_service_validation.coordinator.aws_keyspaces_client import (
+    AWSKeyspacesClient,
+)
 
-# Configure logging
 logging.basicConfig(
-    filename="server.log",
+    stream=sys.stdout,
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
@@ -90,7 +92,9 @@ def main():
                 cassandra.close()
 
             # Step 5 checks for forks and writes to the db.
-            state_hash_df = pd.DataFrame([asdict(submission) for submission in submissions])
+            state_hash_df = pd.DataFrame(
+                [asdict(submission) for submission in submissions]
+            )
             all_files_count = state_hash_df.shape[0]
             if not state_hash_df.empty:
                 master_df["state_hash"] = state_hash_df["state_hash"]
@@ -99,9 +103,17 @@ def main():
                 master_df["parent_state_hash"] = state_hash_df["parent"]
                 master_df["submitter"] = state_hash_df["submitter"]
                 master_df["file_updated"] = state_hash_df["submitted_at"]
-                master_df["file_name"] = state_hash_df["submitted_at"]+"-"+state_hash_df["submitter"] #Perhaps this should be changed? Filename makes less sense now.
+                master_df["file_name"] = (
+                    state_hash_df["submitted_at"] + "-" + state_hash_df["submitter"]
+                )  # Perhaps this should be changed? Filename makes less sense now.
                 master_df["blockchain_epoch"] = state_hash_df["created_at"].apply(
-                                                lambda row: int(calendar.timegm(datetime.strptime(row, "%Y-%m-%dT%H:%M:%SZ").timetuple()) * 1000))
+                    lambda row: int(
+                        calendar.timegm(
+                            datetime.strptime(row, "%Y-%m-%dT%H:%M:%SZ").timetuple()
+                        )
+                        * 1000
+                    )
+                )
 
                 state_hash = pd.unique(
                     master_df[["state_hash", "parent_state_hash"]].values.ravel("k")
