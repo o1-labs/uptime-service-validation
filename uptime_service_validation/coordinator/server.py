@@ -1,6 +1,10 @@
+import logging
+import sys
 from kubernetes import client
 import os
 from datetime import datetime
+import subprocess
+import time
 
 # Set environment variables
 # Get the values of your-image and tag from environment variables
@@ -59,3 +63,90 @@ def setUpValidatorPods(time_intervals, jobs, logging, worker_image, worker_tag):
                 jobs.remove(job_name)
         if len(jobs) == 0:
             break
+
+
+def setUpValidatorProcesses(
+    time_intervals, logging, worker_image, worker_tag, aws_keyspace
+):
+    processes = []
+    for index, mini_batch in enumerate(time_intervals):
+        process_name = (
+            f"local-validator-{datetime.now().strftime('%y-%m-%d-%H-%M')}-{index}"
+        )
+        command = [
+            "docker",
+            "run",
+            "-it",
+            "--rm",
+            "-v",
+            "~/home/piotr/cassandra/cqlshrc:/root/.cassandra/cqlshrc",
+            f"{worker_image}:{worker_tag}",
+            "/bin/delegation-verify",
+            "cassandra",
+            "--keyspace",
+            aws_keyspace,
+            f'"{mini_batch[0]}"',
+            f'"{mini_batch[1]}"',
+        ]
+        print(" ".join(command))
+
+        # Set up environment variables for the process
+        env = os.environ.copy()
+        # env["JobName"] = process_name
+        # env["BatchStart"] = str(mini_batch[0])
+        # env["BatchEnd"] = str(mini_batch[1])
+
+        # Spawn the process
+        proc = subprocess.Popen(command, env=env)
+        processes.append((process_name, proc))
+        logging.info(f"Launching process {index}")
+
+    # Monitor the processes
+    while processes:
+        for process_name, proc in processes:
+            if proc.poll() is not None:  # Check if the process has completed
+                logging.info(f"Process {process_name} completed at {datetime.now()}")
+                processes.remove((process_name, proc))
+
+        time.sleep(1)  # Avoid busy waiting
+
+        if not processes:
+            break
+
+
+# Usage Example
+if __name__ == "__main__":
+    logging.basicConfig(
+        stream=sys.stdout,
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+    time_intervals = [
+        (
+            datetime(2023, 11, 6, 15, 35, 47, 630499),
+            datetime(2023, 11, 6, 15, 36, 17, 630499),
+        ),
+        (
+            datetime(2023, 11, 6, 15, 36, 17, 630499),
+            datetime(2023, 11, 6, 15, 36, 47, 630499),
+        ),
+        (
+            datetime(2023, 11, 6, 15, 36, 47, 630499),
+            datetime(2023, 11, 6, 15, 37, 17, 630499),
+        ),
+        (
+            datetime(2023, 11, 6, 15, 37, 17, 630499),
+            datetime(2023, 11, 6, 15, 37, 47, 630499),
+        ),
+        (
+            datetime(2023, 11, 6, 15, 37, 47, 630499),
+            datetime(2023, 11, 6, 15, 38, 17, 630499),
+        ),
+    ]
+    setUpValidatorProcesses(
+        time_intervals,
+        logging,
+        worker_image="mina-delegation-verify",
+        worker_tag="rriy11hxzl1rlh3ms8cd5ygkzlhfmpb3",
+        aws_keyspace="bpu_integration_dev",
+    )
