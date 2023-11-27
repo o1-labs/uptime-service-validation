@@ -49,10 +49,11 @@ The program requires the setting of several environment variables for operation.
 To connect to AWS Keyspaces, the following environment variables need to be set:
 
 - `AWS_KEYSPACE` - Your AWS Keyspace name.
-- `AWS_REGION` - The AWS region.
-- `CASSANDRA_USER` - Cassandra service user.
-- `CASSANDRA_PASS` - Cassandra service password.
-- `AWS_SSL_CERTIFICATE_PATH` - The path to your SSL certificate for AWS Keyspaces.
+- `CASSANDRA_HOST` - Cassandra host (e.g. cassandra.us-west-2.amazonaws.com).
+- `CASSANDRA_PORT` - Cassandra port (e.g. 9142).
+- `CASSANDRA_USERNAME` - Cassandra service user.
+- `CASSANDRA_PASSWORD` - Cassandra service password.
+- `SSL_CERTFILE` - The path to your SSL certificate for AWS Keyspaces.
 
 > 🗒️ **Note 1:** For convenience, an SSL certificate is provided in this repository and can be found at [/uptime_service_validation/database/aws_keyspaces/cert/sf-class2-root.crt](/uptime_service_validation/database/aws_keyspaces/cert/sf-class2-root.crt). Alternatively, the certificate can also be downloaded directly from AWS. Detailed instructions for obtaining the certificate are available in the AWS Keyspaces documentation, which you can access [here](https://docs.aws.amazon.com/keyspaces/latest/devguide/using_python_driver.html#using_python_driver.BeforeYouBegin).
 
@@ -88,10 +89,11 @@ docker run -e SURVEY_INTERVAL_MINUTES=20 \
            -e WORKER_TAG=your_worker_tag \
            -e WORKER_IMAGE=your_worker_image \
            -e AWS_KEYSPACE=your_aws_keyspace \
-           -e AWS_REGION=your_aws_region \
-           -e CASSANDRA_USER=cassandra_service_user \
-           -e CASSANDRA_PASS=cassandra_service_pass \
-           -e AWS_SSL_CERTIFICATE_PATH=your_aws_ssl_certificate_path \
+           -e CASSANDRA_HOST=cassandra.us-west-2.amazonaws.com \
+           -e CASSANDRA_PORT=9142 \
+           -e CASSANDRA_USERNAME=cassandra_service_user \
+           -e CASSANDRA_PASSWORD=cassandra_service_pass \
+           -e SSL_CERTFILE=your_aws_ssl_certificate_path \
            uptime-service-validation
 ```
 

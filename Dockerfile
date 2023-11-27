@@ -22,7 +22,7 @@ RUN poetry install --no-dev
 # Output logs in real time
 ENV PYTHONUNBUFFERED 1
 # Set cert path for AWS Keyspaces
-ENV AWS_SSL_CERTIFICATE_PATH /usr/src/app/uptime_service_validation/database/aws_keyspaces/cert/sf-class2-root.crt
+ENV SSL_CERTFILE /usr/src/app/uptime_service_validation/database/aws_keyspaces/cert/sf-class2-root.crt
 
 # Run the application
 CMD ["poetry", "run", "start"]

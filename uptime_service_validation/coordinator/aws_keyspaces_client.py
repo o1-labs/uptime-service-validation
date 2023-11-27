@@ -39,10 +39,11 @@ class AWSKeyspacesClient:
     def __init__(self):
         # Load environment variables
         self.aws_keyspace = os.environ.get("AWS_KEYSPACE")
-        self.aws_region = os.environ.get("AWS_REGION")
-        self.cassandra_user = os.environ.get("CASSANDRA_USER")
-        self.cassandra_pass = os.environ.get("CASSANDRA_PASS")
-        self.aws_ssl_certificate_path = os.environ.get("AWS_SSL_CERTIFICATE_PATH")
+        self.cassandra_host = os.environ.get("CASSANDRA_HOST")
+        self.cassandra_port = os.environ.get("CASSANDRA_PORT")
+        self.cassandra_user = os.environ.get("CASSANDRA_USERNAME")
+        self.cassandra_pass = os.environ.get("CASSANDRA_PASSWORD")
+        self.aws_ssl_certificate_path = os.environ.get("SSL_CERTFILE")
 
         self.ssl_context = self._create_ssl_context()
         self.auth_provider = self._create_auth_provider()
@@ -62,10 +63,10 @@ class AWSKeyspacesClient:
 
     def _create_cluster(self):
         return Cluster(
-            ["cassandra." + self.aws_region + ".amazonaws.com"],
+            [self.cassandra_host],
             ssl_context=self.ssl_context,
             auth_provider=self.auth_provider,
-            port=9142,
+            port=int(self.cassandra_port),
         )
 
     def connect(self):
