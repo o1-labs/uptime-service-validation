@@ -2,7 +2,7 @@ import os
 import boto3
 from cassandra.cluster import Cluster
 from ssl import SSLContext, CERT_REQUIRED, PROTOCOL_TLS_CLIENT
-from cassandra_sigv4.auth import SigV4AuthProvider
+from cassandra.auth import PlainTextAuthProvider
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, ByteString, List
@@ -40,8 +40,8 @@ class AWSKeyspacesClient:
         # Load environment variables
         self.aws_keyspace = os.environ.get("AWS_KEYSPACE")
         self.aws_region = os.environ.get("AWS_REGION")
-        self.aws_access_key_id = os.environ.get("AWS_ACCESS_KEY_ID")
-        self.aws_secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
+        self.cassandra_user = os.environ.get("CASSANDRA_USER")
+        self.cassandra_pass = os.environ.get("CASSANDRA_PASS")
         self.aws_ssl_certificate_path = os.environ.get("AWS_SSL_CERTIFICATE_PATH")
 
         self.ssl_context = self._create_ssl_context()
@@ -56,12 +56,9 @@ class AWSKeyspacesClient:
         return ssl_context
 
     def _create_auth_provider(self):
-        boto_session = boto3.Session(
-            aws_access_key_id=self.aws_access_key_id,
-            aws_secret_access_key=self.aws_secret_access_key,
-            region_name=self.aws_region,
+        return PlainTextAuthProvider(
+            username=self.cassandra_user, password=self.cassandra_pass
         )
-        return SigV4AuthProvider(boto_session)
 
     def _create_cluster(self):
         return Cluster(
