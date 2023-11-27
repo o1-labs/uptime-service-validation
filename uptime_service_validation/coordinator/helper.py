@@ -8,7 +8,7 @@ import networkx as nx
 ERROR = "Error: {0}"
 
 
-def getTimeBatches(start_time, end_time, range_number):
+def getTimeBatches(start_time: datetime, end_time: datetime, range_number: int):
     diff = (end_time - start_time) / range_number
     print(diff)
     time_intervals = []
@@ -366,3 +366,10 @@ def getExistingNodes(conn, logger):
     finally:
         cursor.close()
     return nodes
+
+
+if __name__ == "__main__":
+    a = datetime(2023, 11, 6, 15, 35, 47, 630499)
+    b = a + timedelta(minutes=5)
+    result = getTimeBatches(a, b, 10)
+    print(result)
