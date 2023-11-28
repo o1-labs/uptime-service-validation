@@ -369,7 +369,7 @@ def getExistingNodes(conn, logger):
 
 
 if __name__ == "__main__":
-    a = datetime(2023, 11, 6, 15, 35, 47, 630499)
+    a = datetime(2023, 11, 6, 15, 35, 47, 630)
     b = a + timedelta(minutes=5)
     result = getTimeBatches(a, b, 10)
     print(result)

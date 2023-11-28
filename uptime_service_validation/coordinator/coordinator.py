@@ -20,7 +20,7 @@ from uptime_service_validation.coordinator.aws_keyspaces_client import (
 
 
 def test_env():
-    test = os.environ["TEST_ENV"]
+    test = os.environ.get("TEST_ENV")
     if test == "1":
         return True
     else:

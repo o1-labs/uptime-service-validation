@@ -12,6 +12,11 @@ worker_image = os.environ.get("WORKER_IMAGE", "busybox")
 worker_tag = os.environ.get("WORKER_TAG", "latest")
 
 
+# Format datetime such as it is accepted by the stateless validator
+def datetime_formatter(dt):
+    return dt.strftime("%Y-%m-%d %H:%M:%S.%f")[:-5] + "+0000"
+
+
 def setUpValidatorPods(time_intervals, jobs, logging, worker_image, worker_tag):
     # Create a Kubernetes API client
     api = client.BatchV1Api()
@@ -65,41 +70,62 @@ def setUpValidatorPods(time_intervals, jobs, logging, worker_image, worker_tag):
             break
 
 
-def setUpValidatorProcesses(
-    time_intervals, logging, worker_image, worker_tag, aws_keyspace
-):
+def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
     processes = []
     for index, mini_batch in enumerate(time_intervals):
         process_name = (
             f"local-validator-{datetime.now().strftime('%y-%m-%d-%H-%M')}-{index}"
         )
+        image = f"{worker_image}:{worker_tag}"
         command = [
             "docker",
             "run",
             "-it",
+            "--network",
+            "host",
             "--rm",
             "-v",
-            "~/home/piotr/cassandra/cqlshrc:/root/.cassandra/cqlshrc",
-            f"{worker_image}:{worker_tag}",
+            f"{os.environ.get('SSL_CERTFILE')}:/var/ssl/ssl-cert.crt",
+            "--env",
+            "CASSANDRA_HOST",
+            "--env",
+            "CASSANDRA_PORT",
+            "--env",
+            "CASSANDRA_USERNAME",
+            "--env",
+            "CASSANDRA_PASSWORD",
+            "--env",
+            "SSL_CERTFILE=/var/ssl/ssl-cert.crt",
+            "--env",
+            "CASSANDRA_USE_SSL=1",
+            image,
             "/bin/delegation-verify",
             "cassandra",
             "--keyspace",
-            aws_keyspace,
-            f'"{mini_batch[0]}"',
-            f'"{mini_batch[1]}"',
+            os.environ.get("AWS_KEYSPACE"),
+            f"{datetime_formatter(mini_batch[0])}",
+            f"{datetime_formatter(mini_batch[1])}",
         ]
-        print(" ".join(command))
+        # command = [
+        #     "delegation-verify",
+        #     "cassandra",
+        #     "--keyspace",
+        #     os.environ.get("AWS_KEYSPACE"),
+        #     f"{datetime_formatter(mini_batch[0])}",
+        #     f"{datetime_formatter(mini_batch[1])}",
+        # ]
+        cmd_str = " ".join(command)
 
         # Set up environment variables for the process
         env = os.environ.copy()
-        # env["JobName"] = process_name
-        # env["BatchStart"] = str(mini_batch[0])
-        # env["BatchEnd"] = str(mini_batch[1])
+        env["JobName"] = process_name
+        env["BatchStart"] = str(mini_batch[0])
+        env["BatchEnd"] = str(mini_batch[1])
 
         # Spawn the process
         proc = subprocess.Popen(command, env=env)
         processes.append((process_name, proc))
-        logging.info(f"Launching process {index}")
+        logging.info(f"Launching process {index}: {cmd_str}")
 
     # Monitor the processes
     while processes:
@@ -108,7 +134,7 @@ def setUpValidatorProcesses(
                 logging.info(f"Process {process_name} completed at {datetime.now()}")
                 processes.remove((process_name, proc))
 
-        time.sleep(1)  # Avoid busy waiting
+        time.sleep(1)
 
         if not processes:
             break
@@ -123,30 +149,29 @@ if __name__ == "__main__":
     )
     time_intervals = [
         (
-            datetime(2023, 11, 6, 15, 35, 47, 630499),
-            datetime(2023, 11, 6, 15, 36, 17, 630499),
+            datetime(2023, 11, 14, 14, 35, 47, 630),
+            datetime(2023, 11, 14, 14, 36, 17, 630),
         ),
         (
-            datetime(2023, 11, 6, 15, 36, 17, 630499),
-            datetime(2023, 11, 6, 15, 36, 47, 630499),
+            datetime(2023, 11, 14, 14, 36, 17, 630),
+            datetime(2023, 11, 14, 14, 36, 47, 630),
         ),
         (
-            datetime(2023, 11, 6, 15, 36, 47, 630499),
-            datetime(2023, 11, 6, 15, 37, 17, 630499),
+            datetime(2023, 11, 14, 14, 36, 47, 630),
+            datetime(2023, 11, 14, 14, 37, 17, 630),
         ),
         (
-            datetime(2023, 11, 6, 15, 37, 17, 630499),
-            datetime(2023, 11, 6, 15, 37, 47, 630499),
+            datetime(2023, 11, 14, 14, 37, 17, 630),
+            datetime(2023, 11, 14, 14, 37, 47, 630),
         ),
         (
-            datetime(2023, 11, 6, 15, 37, 47, 630499),
-            datetime(2023, 11, 6, 15, 38, 17, 630499),
+            datetime(2023, 11, 14, 14, 37, 47, 630),
+            datetime(2023, 11, 14, 14, 38, 17, 630),
         ),
     ]
     setUpValidatorProcesses(
         time_intervals,
         logging,
-        worker_image="mina-delegation-verify",
-        worker_tag="rriy11hxzl1rlh3ms8cd5ygkzlhfmpb3",
-        aws_keyspace="bpu_integration_dev",
+        worker_image,
+        worker_tag,
     )
