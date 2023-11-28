@@ -53,8 +53,6 @@ def main():
         connection, logging, interval
     )
     cur_timestamp = datetime.now(timezone.utc)
-    relation_df, p_selected_node_df = getPreviousStatehash(bot_log_id)
-    p_map = getRelationList(relation_df)
 
     logging.info(
         "script start at {0}  end at {1}".format(prev_batch_end, cur_timestamp)
@@ -74,11 +72,11 @@ def main():
             master_df = pd.DataFrame()
             # Step 2 Create time ranges:
             time_intervals = getTimeBatches(
-                prev_batch_end, cur_batch_end, os.environ["MINI_BATCH_NUMBER"]
+                prev_batch_end, cur_batch_end, int(os.environ["MINI_BATCH_NUMBER"])
             )
             # Step 3 Create Kubernetes ZKValidators and pass mini-batches.
             worker_image = os.environ["WORKER_IMAGE"]
-            worker_tag = (os.environ["WORKER_TAG"],)
+            worker_tag = os.environ["WORKER_TAG"]
             start = time()
             jobs = []
             if test_env():
@@ -109,7 +107,7 @@ def main():
                 )
             finally:
                 cassandra.close()
-
+            logging.info("number of submissions: {0}".format(len(submissions)))
             # Step 5 checks for forks and writes to the db.
             state_hash_df = pd.DataFrame(
                 [asdict(submission) for submission in submissions]
@@ -161,6 +159,10 @@ def main():
                     }
                 )
 
+                relation_df, p_selected_node_df = getPreviousStatehash(
+                    connection, logging, bot_log_id
+                )
+                p_map = getRelationList(relation_df)
                 c_selected_node = filterStateHashPercentage(master_df)
                 batch_graph = createGraph(
                     master_df, p_selected_node_df, c_selected_node, p_map
