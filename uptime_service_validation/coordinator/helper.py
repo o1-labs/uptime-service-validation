@@ -122,7 +122,7 @@ def findNewValuesToInsert(existing_values, new_values):
     return (
         existing_values.merge(new_values, how="outer", indicator=True)
         .loc[lambda x: x["_merge"] == "right_only"]
-        .drop("_merge", 1)
+        .drop("_merge", axis=1)
         .drop_duplicates()
     )
 
@@ -136,6 +136,7 @@ def createStatehash(conn, logger, statehash_df, page_size=100):
     try:
         cursor = conn.cursor()
         extras.execute_batch(cursor, query, tuples, page_size)
+        conn.commit()
     except (Exception, psycopg2.DatabaseError) as error:
         logger.error(ERROR.format(error))
         cursor.close()

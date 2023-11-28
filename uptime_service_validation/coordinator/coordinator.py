@@ -80,7 +80,7 @@ def main():
             start = time()
             jobs = []
             if test_env():
-                logging.info("running in test environment")
+                logging.warn("running in test environment")
                 setUpValidatorProcesses(
                     time_intervals, logging, worker_image, worker_tag
                 )
@@ -107,7 +107,9 @@ def main():
                 )
             finally:
                 cassandra.close()
+
             logging.info("number of submissions: {0}".format(len(submissions)))
+
             # Step 5 checks for forks and writes to the db.
             state_hash_df = pd.DataFrame(
                 [asdict(submission) for submission in submissions]
@@ -121,15 +123,12 @@ def main():
                 master_df["submitter"] = state_hash_df["submitter"]
                 master_df["file_updated"] = state_hash_df["submitted_at"]
                 master_df["file_name"] = (
-                    state_hash_df["submitted_at"] + "-" + state_hash_df["submitter"]
+                    state_hash_df["submitted_at"].astype(str)
+                    + "-"
+                    + state_hash_df["submitter"].astype(str)
                 )  # Perhaps this should be changed? Filename makes less sense now.
                 master_df["blockchain_epoch"] = state_hash_df["created_at"].apply(
-                    lambda row: int(
-                        calendar.timegm(
-                            datetime.strptime(row, "%Y-%m-%dT%H:%M:%SZ").timetuple()
-                        )
-                        * 1000
-                    )
+                    lambda row: int(row.timestamp() * 1000)
                 )
 
                 state_hash = pd.unique(
