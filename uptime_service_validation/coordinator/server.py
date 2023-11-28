@@ -80,6 +80,7 @@ def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
         command = [
             "docker",
             "run",
+            "--privileged",
             "-it",
             "--network",
             "host",
