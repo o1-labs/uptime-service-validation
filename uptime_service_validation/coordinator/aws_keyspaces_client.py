@@ -1,7 +1,7 @@
 import os
 import boto3
 from cassandra import ProtocolVersion
-from cassandra.cluster import Cluster
+from cassandra.cluster import Cluster, ExecutionProfile, EXEC_PROFILE_DEFAULT
 from cassandra_sigv4.auth import SigV4AuthProvider
 from cassandra.policies import DCAwareRoundRobinPolicy
 from ssl import SSLContext, CERT_REQUIRED, PROTOCOL_TLS_CLIENT
@@ -68,12 +68,15 @@ class AWSKeyspacesClient:
         return SigV4AuthProvider(boto_session)
 
     def _create_cluster(self):
+        profile = ExecutionProfile(
+            load_balancing_policy=DCAwareRoundRobinPolicy(local_dc=self.aws_region)
+        )
         return Cluster(
             [self.cassandra_host],
             ssl_context=self.ssl_context,
             auth_provider=self.auth_provider,
             port=int(self.cassandra_port),
-            load_balancing_policy=DCAwareRoundRobinPolicy(local_dc=self.aws_region),
+            execution_profiles={EXEC_PROFILE_DEFAULT: profile},
             protocol_version=ProtocolVersion.V4,
         )
 
