@@ -112,11 +112,11 @@ To connect to AWS Keyspaces, the following environment variables need to be set:
 - `AWS_REGION` - The AWS region.
 - `AWS_ACCESS_KEY_ID` - Your AWS Access Key ID.
 - `AWS_SECRET_ACCESS_KEY` - Your AWS Secret Access Key.
-- `AWS_SSL_CERTIFICATE_PATH` - The path to your SSL certificate for AWS Keyspaces.
+- `SSL_CERTFILE` - The path to your SSL certificate for AWS Keyspaces.
 
 > 🗒️ **Note 1:** For convenience, an SSL certificate is provided in this repository and can be found at [/uptime_service_validation/database/aws_keyspaces/cert/sf-class2-root.crt](/uptime_service_validation/database/aws_keyspaces/cert/sf-class2-root.crt). Alternatively, the certificate can also be downloaded directly from AWS. Detailed instructions for obtaining the certificate are available in the AWS Keyspaces documentation, which you can access [here](https://docs.aws.amazon.com/keyspaces/latest/devguide/using_python_driver.html#using_python_driver.BeforeYouBegin).
 
-> 🗒️ **Note 2:** Docker image already includes cert and has `AWS_SSL_CERTIFICATE_PATH` set up, however it can be overriden by providing this env variable to docker.
+> 🗒️ **Note 2:** Docker image already includes cert and has `SSL_CERTFILE` set up, however it can be overriden by providing this env variable to docker.
 
 ### Test Configuration
 
@@ -151,6 +151,6 @@ docker run -e SURVEY_INTERVAL_MINUTES=20 \
            -e AWS_REGION=your_aws_region \
            -e AWS_ACCESS_KEY_ID=your_aws_access_key_id \
            -e AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key \
-           -e AWS_SSL_CERTIFICATE_PATH=your_aws_ssl_certificate_path \
+           -e SSL_CERTFILE=your_aws_ssl_certificate_path \
            uptime-service-validation
 ```

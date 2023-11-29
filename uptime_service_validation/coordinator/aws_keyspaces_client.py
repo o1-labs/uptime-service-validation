@@ -42,7 +42,7 @@ class AWSKeyspacesClient:
         self.aws_region = os.environ.get("AWS_REGION")
         self.aws_access_key_id = os.environ.get("AWS_ACCESS_KEY_ID")
         self.aws_secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
-        self.aws_ssl_certificate_path = os.environ.get("AWS_SSL_CERTIFICATE_PATH")
+        self.aws_ssl_certificate_path = os.environ.get("SSL_CERTFILE")
 
         self.ssl_context = self._create_ssl_context()
         self.auth_provider = self._create_auth_provider()
