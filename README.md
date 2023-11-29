@@ -109,7 +109,8 @@ Create a database and relevant tables before first-time program execution using 
 To connect to AWS Keyspaces, the following environment variables need to be set:
 
 - `AWS_KEYSPACE` - Your AWS Keyspace name.
-- `AWS_REGION` - The AWS region.
+- `CASSANDRA_HOST` - Cassandra host (e.g. cassandra.us-west-2.amazonaws.com).
+- `CASSANDRA_PORT` - Cassandra port (e.g. 9142).
 - `AWS_ACCESS_KEY_ID` - Your AWS Access Key ID.
 - `AWS_SECRET_ACCESS_KEY` - Your AWS Secret Access Key.
 - `SSL_CERTFILE` - The path to your SSL certificate for AWS Keyspaces.
@@ -148,7 +149,8 @@ docker run -e SURVEY_INTERVAL_MINUTES=20 \
            -e WORKER_TAG=your_worker_tag \
            -e WORKER_IMAGE=your_worker_image \
            -e AWS_KEYSPACE=your_aws_keyspace \
-           -e AWS_REGION=your_aws_region \
+           -e CASSANDRA_HOST=cassandra.us-west-2.amazonaws.com \
+           -e CASSANDRA_PORT=9142 \
            -e AWS_ACCESS_KEY_ID=your_aws_access_key_id \
            -e AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key \
            -e SSL_CERTFILE=your_aws_ssl_certificate_path \
