@@ -252,6 +252,26 @@ cle = ["cryptography (>=35.0)"]
 graph = ["gremlinpython (==3.4.6)"]
 
 [[package]]
+name = "cassandra-sigv4"
+version = "4.0.2"
+description = "Implements a sigv4 authentication plugin for the open-source Datastax Python Driver for Apache Cassandra"
+optional = false
+python-versions = ">=2.7, <4"
+files = []
+develop = false
+
+[package.dependencies]
+boto3 = "*"
+cassandra-driver = "*"
+six = "*"
+
+[package.source]
+type = "git"
+url = "https://github.com/aws/aws-sigv4-auth-cassandra-python-driver-plugin.git"
+reference = "HEAD"
+resolved_reference = "6d8b77b4fd1be84f44e569227e0be5ef584b31b3"
+
+[[package]]
 name = "certifi"
 version = "2023.7.22"
 description = "Python package for providing Mozilla's CA Bundle."
@@ -1677,4 +1697,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<3.13"
-content-hash = "ddcd2437cffe86cf18288bdf0fda44510b0273f4282b3798cc1e55e8ff6665af"
+content-hash = "5479b2ab2cd60c199cbb4039f4584dfa3cbdbe8e8e751f861a7602fbe8ffeff3"
