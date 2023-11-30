@@ -79,7 +79,7 @@ def getPreviousStatehash(conn, logger, bot_log_id):
     cursor = conn.cursor()
     try:
         sql_query = """select  ps.value parent_statehash, s1.value statehash, b.weight
-            from bot_logs_statehash b join statehash s1 ON s1.id = b.statehash_id 
+            from botlogs_statehash b join statehash s1 ON s1.id = b.statehash_id 
 		    join statehash ps on b.parent_statehash_id = ps.id where bot_log_id =%s"""
         cursor.execute(sql_query, (bot_log_id,))
         result = cursor.fetchall()
@@ -136,7 +136,6 @@ def createStatehash(conn, logger, statehash_df, page_size=100):
     try:
         cursor = conn.cursor()
         extras.execute_batch(cursor, query, tuples, page_size)
-        conn.commit()
     except (Exception, psycopg2.DatabaseError) as error:
         logger.error(ERROR.format(error))
         cursor.close()
