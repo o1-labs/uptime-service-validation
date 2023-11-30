@@ -197,7 +197,7 @@ def main():
                     graph=weighted_graph,
                     queue_list=queue_list,
                     node=queue_list[0],
-                    batch_statehash=batch_state_hash,
+                    # batch_statehash=batch_state_hash, (this used to be here in old code, but it's not used anywhere inside the function)
                 )
                 point_record_df = master_df[
                     master_df["state_hash"].isin(

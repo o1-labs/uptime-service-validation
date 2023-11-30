@@ -259,7 +259,7 @@ def getMinimumWeight(graph, child_node):
     return child_node_weight
 
 
-def bfs(graph, queue_list, node, batch_statehash, max_depth=2):
+def bfs(graph, queue_list, node, max_depth=2):
     visited = list()
     visited.append(node)
     cnt = 2
