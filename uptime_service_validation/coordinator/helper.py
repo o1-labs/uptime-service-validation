@@ -12,7 +12,13 @@ ERROR = "Error: {0}"
 
 # utility function to create row in bot_logs table if it is empty
 def add_row_to_bot_logs_if_empty(
-    conn, logger, processing_time, files_processed, batch_start_epoch, batch_end_epoch
+    conn,
+    logger,
+    processing_time,
+    files_processed,
+    batch_start_epoch,
+    batch_end_epoch,
+    override_if_empty=False,
 ):
     try:
         cursor = conn.cursor()
@@ -20,7 +26,7 @@ def add_row_to_bot_logs_if_empty(
         result = cursor.fetchone()
         count = result[0]
 
-        if count == 0:
+        if count == 0 or override_if_empty:
             batch_end_dt = datetime.fromtimestamp(batch_end_epoch, timezone.utc)
 
             cursor.execute(
@@ -423,6 +429,6 @@ if __name__ == "__main__":
         user=os.environ["POSTGRES_USER"],
         password=os.environ["POSTGRES_PASSWORD"],
     )
-    timestamp = datetime.now().timestamp()
+    # timestamp = datetime.now().timestamp()
     timestamp = datetime(2023, 11, 14, 14, 35, 47).timestamp()
     add_row_to_bot_logs_if_empty(connection, logging, 0, 0, timestamp, timestamp)
