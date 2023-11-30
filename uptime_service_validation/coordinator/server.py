@@ -80,8 +80,8 @@ def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
         command = [
             "docker",
             "run",
+            # "-it",
             "--privileged",
-            "-it",
             "--network",
             "host",
             "--rm",
@@ -115,6 +115,7 @@ def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
         #     os.environ.get("AWS_KEYSPACE"),
         #     f"{datetime_formatter(mini_batch[0])}",
         #     f"{datetime_formatter(mini_batch[1])}",
+        #     "--no-check",
         # ]
         cmd_str = " ".join(command)
 
@@ -125,7 +126,9 @@ def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
         env["BatchEnd"] = str(mini_batch[1])
 
         # Spawn the process
-        proc = subprocess.Popen(command, env=env)
+        proc = subprocess.Popen(
+            command, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
         processes.append((process_name, proc))
         logging.info(f"Launching process {index}: {cmd_str}")
 
@@ -133,7 +136,14 @@ def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
     while processes:
         for process_name, proc in processes:
             if proc.poll() is not None:  # Check if the process has completed
+                # Handle process stdout and stderr and remove it
+                output, errors = proc.communicate()
                 logging.info(f"Process {process_name} completed at {datetime.now()}")
+                if output:
+                    logging.info(f"{process_name} (stdout): {output.decode().strip()}")
+                if errors:
+                    logging.error(f"{process_name} (stderr): {errors.decode().strip()}")
+
                 processes.remove((process_name, proc))
 
         time.sleep(1)
