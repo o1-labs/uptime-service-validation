@@ -259,7 +259,7 @@ def getMinimumWeight(graph, child_node):
     return child_node_weight
 
 
-def bfs(graph, queue_list, node, max_depth=2):
+def bfs(graph, queue_list, node, batch_statehash, max_depth=2):
     visited = list()
     visited.append(node)
     cnt = 2
@@ -307,7 +307,7 @@ def createBotLog(conn, logger, values):
 def insertStatehashResults(conn, logger, df, page_size=100):
     temp_df = df[["parent_state_hash", "state_hash", "weight", "bot_log_id"]]
     tuples = [tuple(x) for x in temp_df.to_numpy()]
-    query = """INSERT INTO bot_logs_statehash(parent_statehash_id, statehash_id, weight, bot_log_id ) 
+    query = """INSERT INTO botlogs_statehash(parent_statehash_id, statehash_id, weight, bot_log_id ) 
         VALUES ( (SELECT id FROM statehash WHERE value= %s), (SELECT id FROM statehash WHERE value= %s), %s, %s ) """
     cursor = conn.cursor()
 
@@ -319,7 +319,7 @@ def insertStatehashResults(conn, logger, df, page_size=100):
         return 1
     finally:
         cursor.close()
-    logger.info("create_bot_logs_statehash  end ")
+    logger.info("create_botlogs_statehash  end ")
     return 0
 
 
