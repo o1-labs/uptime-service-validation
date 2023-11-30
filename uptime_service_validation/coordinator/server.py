@@ -106,6 +106,7 @@ def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
             os.environ.get("AWS_KEYSPACE"),
             f"{datetime_formatter(mini_batch[0])}",
             f"{datetime_formatter(mini_batch[1])}",
+            "--no-check",
         ]
         # command = [
         #     "delegation-verify",
