@@ -110,6 +110,7 @@ def createStatehash(conn, logger, statehash_df, page_size=100):
 
 
 def createNodeRecord(conn, logger, df, page_size=100):
+    logger.info("create_point_record  start ")
     tuples = [tuple(x) for x in df.to_numpy()]
     query = """INSERT INTO nodes ( block_producer_key, updated_at) 
             VALUES ( %s,  %s )  """
@@ -251,6 +252,7 @@ def bfs(graph, queue_list, node, max_depth=2):
 
 
 def createBotLog(conn, logger, values):
+    logger.info("create_bot_log  start ")
     query = """INSERT INTO bot_logs(files_processed, file_timestamps, batch_start_epoch, batch_end_epoch, 
                 processing_time)  values ( %s, %s, %s, %s, %s) RETURNING id """
     try:
@@ -268,6 +270,7 @@ def createBotLog(conn, logger, values):
 
 
 def insertStatehashResults(conn, logger, df, page_size=100):
+    logger.info("create_botlogs_statehash  start ")
     temp_df = df[["parent_state_hash", "state_hash", "weight", "bot_log_id"]]
     tuples = [tuple(x) for x in temp_df.to_numpy()]
     query = """INSERT INTO botlogs_statehash(parent_statehash_id, statehash_id, weight, bot_log_id ) 
@@ -287,6 +290,7 @@ def insertStatehashResults(conn, logger, df, page_size=100):
 
 
 def createPointRecord(conn, logger, df, page_size=100):
+    logger.info("create_point_record  start ")
     tuples = [tuple(x) for x in df.to_numpy()]
     query = """INSERT INTO points (file_name, file_timestamps, blockchain_epoch, node_id, blockchain_height,
                 amount, created_at, bot_log_id, statehash_id) 
@@ -306,6 +310,7 @@ def createPointRecord(conn, logger, df, page_size=100):
 
 
 def updateScoreboard(conn, logger, score_till_time, uptime_days=30):
+    logger.info("updateScoreboard  start ")
     sql = """with vars  (snapshot_date, start_date) as( values (%s AT TIME ZONE 'UTC', 
 			(%s - interval '%s' day) AT TIME ZONE 'UTC')
 	)
@@ -351,6 +356,7 @@ def updateScoreboard(conn, logger, score_till_time, uptime_days=30):
         return -1
     finally:
         cursor.close()
+    logger.info("updateScoreboard  end ")
     return 0
 
 
