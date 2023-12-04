@@ -7,7 +7,7 @@ import psycopg2
 from kubernetes import config
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
-from time import time
+from time import sleep, time
 from dataclasses import asdict
 from uptime_service_validation.coordinator.helper import *
 from uptime_service_validation.coordinator.server import (
@@ -59,9 +59,7 @@ def main():
     )
     cur_timestamp = datetime.now(timezone.utc)
 
-    logging.info(
-        "script start at {0}  end at {1}".format(prev_batch_end, cur_timestamp)
-    )
+    logging.info("script start at {0} end at {1}".format(prev_batch_end, cur_timestamp))
     do_process = True
     while do_process:
         existing_state_df = getStatehashDF(connection, logging)
@@ -71,8 +69,13 @@ def main():
         )
 
         if cur_batch_end > cur_timestamp:
-            logging.info("all files are processed till date")
-            return
+            sleep_interval = cur_batch_end - cur_timestamp
+            logging.info(
+                "all submissions are processed till date. Need to wait %s before starting next batch...",
+                sleep_interval,
+            )
+            sleep(sleep_interval.total_seconds())
+            cur_timestamp = datetime.now(timezone.utc)
         else:
             master_df = pd.DataFrame()
             # Step 2 Create time ranges:
