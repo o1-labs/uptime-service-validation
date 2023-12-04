@@ -19,7 +19,7 @@ This component is responsible for taking submissions data gathered by [uptime-se
 
 1. **Install dependencies:**
 
-```sh
+```bash
 git clone https://github.com/MinaFoundation/uptime-service-validation.git
 cd uptime-service-validation
 
@@ -30,7 +30,7 @@ poetry install
 
 After installing the project dependencies with `poetry install`, you can activate the virtual environment by running:
 
-```sh
+```bash
 poetry shell
 ```
 
@@ -38,7 +38,7 @@ This will spawn a new shell (subshell) with the virtual environment activated. I
 
 ### Testing
 
-```sh
+```bash
 poetry run pytest -v
 ```
 
@@ -123,13 +123,21 @@ To connect to AWS Keyspaces, the following environment variables need to be set:
 
 By default, the program runs `stateless-verification-tool` in separate Kubernetes pods. For testing purposes, it can be configured to run them as subprocesses on the same machine. Set the optional environment variable `TEST_ENV=1` for this mode.
 
+## Running the program
+
+Once everything is configured we can start the program by running:
+
+```bash
+poetry run start
+```
+
 ## Docker
 
 Program is also shipped as a docker image.
 
 ### Building Docker
 
-```sh
+```bash
 docker build -t uptime-service-validation .
 ```
 
@@ -137,22 +145,22 @@ docker build -t uptime-service-validation .
 
 When running pass all relevant env variables to the docker (see `.env`), e.g.:
 
-```sh
-docker run -e SURVEY_INTERVAL_MINUTES=20 \
-           -e POSTGRES_HOST=your_postgres_host \
-           -e POSTGRES_PORT=your_postgres_port \
-           -e POSTGRES_DB=your_postgres_db \
-           -e POSTGRES_USER=your_postgres_user \
-           -e POSTGRES_PASSWORD=your_postgres_password \
-           -e MINI_BATCH_NUMBER=2 \
-           -e UPTIME_DAYS_FOR_SCORE=your_uptime_days_for_score \
-           -e WORKER_TAG=your_worker_tag \
-           -e WORKER_IMAGE=your_worker_image \
-           -e AWS_KEYSPACE=your_aws_keyspace \
-           -e CASSANDRA_HOST=cassandra.us-west-2.amazonaws.com \
-           -e CASSANDRA_PORT=9142 \
-           -e AWS_ACCESS_KEY_ID=your_aws_access_key_id \
-           -e AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key \
-           -e SSL_CERTFILE=your_aws_ssl_certificate_path \
+```bash
+docker run -e SURVEY_INTERVAL_MINUTES \
+           -e MINI_BATCH_NUMBER \
+           -e UPTIME_DAYS_FOR_SCORE \
+           -e WORKER_IMAGE \
+           -e WORKER_TAG \
+           -e POSTGRES_HOST \
+           -e POSTGRES_PORT \
+           -e POSTGRES_DB \
+           -e POSTGRES_USER \
+           -e POSTGRES_PASSWORD \
+           -e AWS_KEYSPACE \
+           -e CASSANDRA_HOST \
+           -e CASSANDRA_PORT \
+           -e AWS_ACCESS_KEY_ID \
+           -e AWS_SECRET_ACCESS_KEY \
+           -e SSL_CERTFILE \
            uptime-service-validation
 ```
