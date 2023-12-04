@@ -1,4 +1,3 @@
-import os
 import psycopg2
 import psycopg2.extras as extras
 import matplotlib.pyplot as plt
@@ -8,48 +7,6 @@ import networkx as nx
 
 
 ERROR = "Error: {0}"
-
-
-# utility function to create row in bot_logs table if it is empty
-def add_row_to_bot_logs_if_empty(
-    conn,
-    logger,
-    processing_time,
-    files_processed,
-    batch_start_epoch,
-    batch_end_epoch,
-    override_if_empty=False,
-):
-    try:
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM bot_logs")
-        result = cursor.fetchone()
-        count = result[0]
-
-        if count == 0 or override_if_empty:
-            batch_end_dt = datetime.fromtimestamp(batch_end_epoch, timezone.utc)
-
-            cursor.execute(
-                "INSERT INTO bot_logs (processing_time, files_processed, file_timestamps, batch_start_epoch, batch_end_epoch) \
-                VALUES (%s, %s, %s, %s, %s)",
-                (
-                    processing_time,
-                    files_processed,
-                    batch_end_dt,
-                    batch_start_epoch,
-                    batch_end_epoch,
-                ),
-            )
-
-            conn.commit()
-
-            logger.info("Initial row added successfully.")
-    except (Exception, psycopg2.DatabaseError) as error:
-        logger.error(ERROR.format(error))
-        return -1
-    finally:
-        if cursor is not None:
-            cursor.close()
 
 
 def getTimeBatches(start_time: datetime, end_time: datetime, range_number: int):
@@ -410,25 +367,3 @@ def getExistingNodes(conn, logger):
     finally:
         cursor.close()
     return nodes
-
-
-if __name__ == "__main__":
-    import logging
-    import sys
-
-    logging.basicConfig(
-        stream=sys.stdout,
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
-
-    connection = psycopg2.connect(
-        host=os.environ["POSTGRES_HOST"],
-        port=os.environ["POSTGRES_PORT"],
-        database=os.environ["POSTGRES_DB"],
-        user=os.environ["POSTGRES_USER"],
-        password=os.environ["POSTGRES_PASSWORD"],
-    )
-    # timestamp = datetime.now().timestamp()
-    timestamp = datetime(2023, 11, 14, 14, 35, 47).timestamp()
-    add_row_to_bot_logs_if_empty(connection, logging, 0, 0, timestamp, timestamp)
