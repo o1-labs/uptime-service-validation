@@ -4,7 +4,9 @@
 
 ## Overview
 
-This repository is home for Validator/Coordinator component for Mina Delegation Program.
+This repository is home for Validator/Coordinator component for Mina Delegation Program. 
+This component is responsible for taking submissions data gathered by [uptime-service-backend](https://github.com/MinaFoundation/uptime-service-backend) and running validation against them using [stateles-verification-tool](https://github.com/MinaProtocol/mina/pull/14593). Next, based on these validation results, the Coordinator builds its own database containing uptime score.
+
 
 ## Getting Started
 
@@ -42,7 +44,57 @@ poetry run pytest -v
 
 ## Configuration
 
-The program requires the setting of several environment variables for operation. These variables should be defined in a `.env` file, which the program will load at runtime.
+The program requires setting several environment variables for operation and setting up a Postgres database. Optionally, these variables can be defined in a `.env` file, which the program will load at runtime. Below, we explain the environment variables in more detail.
+
+### Runtime Configuration
+
+These environment variables control the program's runtime:
+
+- `SURVEY_INTERVAL_MINUTES` - Interval in minutes between processing data batches. Determines the end time (`cur_batch_end`) of the current batch by adding this interval to `prev_batch_end`.
+- `MINI_BATCH_NUMBER` - Number of mini-batches to process within each main batch. Used by `getTimeBatches` to divide the time between `prev_batch_end` and `cur_batch_end` into smaller intervals.
+- `UPTIME_DAYS_FOR_SCORE` - Number of days the system must be operational to calculate a score. Used by `updateScoreboard` to define the scoreboard update period.
+
+### Stateless Verification Tool Configuration
+
+The Coordinator program runs the `stateless-verification-tool` for validation against submissions. Set the following environment variables for this purpose:
+
+- `WORKER_IMAGE` - Docker image name for the stateless verifier (e.g., `mina-delegation-verify`).
+- `WORKER_TAG` - Specific tag of the Docker image, indicating the version or build.
+
+### Postgres Configuration
+
+Set these environment variables for the Postgres connection:
+
+- `POSTGRES_HOST` - Hostname or IP of the PostgreSQL server (e.g., `localhost`).
+- `POSTGRES_PORT` - Port for PostgreSQL (default is `5432`).
+- `POSTGRES_DB` - Specific PostgreSQL database name (e.g., `coordinator`).
+- `POSTGRES_USER` - Username for PostgreSQL authentication.
+- `POSTGRES_PASSWORD` - Password for the specified PostgreSQL user.
+
+Create a database and relevant tables before first-time program execution using Python `invoke` tasks:
+
+1. **Create database and tables**:
+
+   ```bash
+   invoke create-database
+   ```
+
+   > :warning: This script drops all existing tables and creates new ones.
+
+2. **Initialize `bot_logs` table**:
+
+   The program requires an entry in `bot_logs`, especially the `batch_end_epoch` column, as a starting point. For first-time runs, create this entry as follows:
+
+   ```bash
+   # Initialize with current timestamp
+   invoke init-database
+
+   # Initialize with a specific timestamp
+   invoke init-database --batch-end-epoch <timestamp>
+
+   # Initialize with a timestamp from n minutes ago
+   invoke init-database --mins-ago 20
+   ```
 
 ### AWS Keyspaces Configuration
 
@@ -59,11 +111,11 @@ To connect to AWS Keyspaces, the following environment variables need to be set:
 
 > 🗒️ **Note 2:** Docker image already includes cert and has `AWS_SSL_CERTIFICATE_PATH` set up, however it can be overriden by providing this env variable to docker.
 
-### Postgres Database Configuration
+### Test Configuration
 
-The database needs to be set up. (see `createDB.sql`)
+By default, the program runs `stateless-verification-tool` in separate Kubernetes pods. For testing purposes, it can be configured to run them as subprocesses on the same machine. Set the optional environment variable `TEST_ENV=1` for this mode.
 
-### Docker
+## Docker
 
 Program is also shipped as a docker image.
 
@@ -78,35 +130,21 @@ docker build -t uptime-service-validation .
 When running pass all relevant env variables to the docker (see `.env`), e.g.:
 
 ```sh
-docker run -e SURVEY_INTERVAL_MINUTES=20 \
-           -e POSTGRES_HOST=your_postgres_host \
-           -e POSTGRES_PORT=your_postgres_port \
-           -e POSTGRES_DB=your_postgres_db \
-           -e POSTGRES_USER=your_postgres_user \
-           -e POSTGRES_PASSWORD=your_postgres_password \
-           -e MINI_BATCH_NUMBER=2 \
-           -e UPTIME_DAYS_FOR_SCORE=your_uptime_days_for_score \
-           -e WORKER_TAG=your_worker_tag \
-           -e WORKER_IMAGE=your_worker_image \
-           -e AWS_KEYSPACE=your_aws_keyspace \
-           -e CASSANDRA_HOST=cassandra.us-west-2.amazonaws.com \
-           -e CASSANDRA_PORT=9142 \
-           -e CASSANDRA_USERNAME=cassandra_service_user \
-           -e CASSANDRA_PASSWORD=cassandra_service_pass \
-           -e SSL_CERTFILE=your_aws_ssl_certificate_path \
+docker run -e SURVEY_INTERVAL_MINUTES \
+           -e POSTGRES_HOST \
+           -e POSTGRES_PORT \
+           -e POSTGRES_DB \
+           -e POSTGRES_USER \
+           -e POSTGRES_PASSWORD \
+           -e MINI_BATCH_NUMBER \
+           -e UPTIME_DAYS_FOR_SCORE \
+           -e WORKER_TAG \
+           -e WORKER_IMAGE \
+           -e AWS_KEYSPACE \
+           -e CASSANDRA_HOST \
+           -e CASSANDRA_PORT \
+           -e CASSANDRA_USERNAME \
+           -e CASSANDRA_PASSWORD \
+           -e SSL_CERTFILE \
            uptime-service-validation
 ```
-
-## Deployment
-
-The program needs:
-* The tables set up (see `createDB.sql`)
-* `.env` file set up
-
-Once done, one can launch the program with the following command:
-
-```sh
-poetry run start
-```
-
-Or run docker.

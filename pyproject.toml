@@ -16,6 +16,7 @@ networkx = "^3.2.1"
 matplotlib = "^3.8.1"
 psycopg2 = "^2.9.9"
 cassandra-driver = "^3.28.0"
+invoke = "^2.2.0"
 
 [tool.poetry.scripts]
 start = "uptime_service_validation.coordinator.coordinator:main"

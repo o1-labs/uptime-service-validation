@@ -10,23 +10,39 @@ from dotenv import load_dotenv
 from time import time
 from dataclasses import asdict
 from uptime_service_validation.coordinator.helper import *
-from uptime_service_validation.coordinator.server import setUpValidatorPods
+from uptime_service_validation.coordinator.server import (
+    setUpValidatorPods,
+    setUpValidatorProcesses,
+)
 from uptime_service_validation.coordinator.aws_keyspaces_client import (
     AWSKeyspacesClient,
 )
 
-logging.basicConfig(
-    stream=sys.stdout,
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
+# Add project root to python path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.insert(0, project_root)
 
-# Load the in-cluster configuration
-config.load_incluster_config()
+
+def test_env():
+    test = os.environ.get("TEST_ENV")
+    if test == "1":
+        return True
+    else:
+        return False
 
 
 def main():
+    process_loop_count = 0
     load_dotenv()
+
+    logging.basicConfig(
+        stream=sys.stdout,
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+    # Load the in-cluster configuration only if not test environment
+    if not test_env():
+        config.load_incluster_config()
 
     connection = psycopg2.connect(
         host=os.environ["POSTGRES_HOST"],
@@ -42,8 +58,6 @@ def main():
         connection, logging, interval
     )
     cur_timestamp = datetime.now(timezone.utc)
-    relation_df, p_selected_node_df = getPreviousStatehash(bot_log_id)
-    p_map = getRelationList(relation_df)
 
     logging.info(
         "script start at {0}  end at {1}".format(prev_batch_end, cur_timestamp)
@@ -63,14 +77,22 @@ def main():
             master_df = pd.DataFrame()
             # Step 2 Create time ranges:
             time_intervals = getTimeBatches(
-                prev_batch_end, cur_batch_end, os.environ["MINI_BATCH_NUMBER"]
+                prev_batch_end, cur_batch_end, int(os.environ["MINI_BATCH_NUMBER"])
             )
             # Step 3 Create Kubernetes ZKValidators and pass mini-batches.
             worker_image = os.environ["WORKER_IMAGE"]
-            worker_tag = (os.environ["WORKER_TAG"],)
+            worker_tag = os.environ["WORKER_TAG"]
             start = time()
             jobs = []
-            setUpValidatorPods(time_intervals, jobs, logging, worker_image, worker_tag)
+            if test_env():
+                logging.warning("running in test environment")
+                setUpValidatorProcesses(
+                    time_intervals, logging, worker_image, worker_tag
+                )
+            else:
+                setUpValidatorPods(
+                    time_intervals, jobs, logging, worker_image, worker_tag
+                )
             end = time()
             # Step 4 We need to read the ZKValidator results from a db.
             logging.info(
@@ -91,6 +113,18 @@ def main():
             finally:
                 cassandra.close()
 
+            logging.info("number of submissions: {0}".format(len(submissions)))
+            # print("submitter, state_hash, parent, height, slot, validation_error")
+            # for s in submissions:
+            #     print(
+            #         s.submitter,
+            #         s.state_hash,
+            #         s.parent,
+            #         s.height,
+            #         s.slot,
+            #         s.validation_error,
+            #     )
+
             # Step 5 checks for forks and writes to the db.
             state_hash_df = pd.DataFrame(
                 [asdict(submission) for submission in submissions]
@@ -104,15 +138,12 @@ def main():
                 master_df["submitter"] = state_hash_df["submitter"]
                 master_df["file_updated"] = state_hash_df["submitted_at"]
                 master_df["file_name"] = (
-                    state_hash_df["submitted_at"] + "-" + state_hash_df["submitter"]
+                    state_hash_df["submitted_at"].astype(str)
+                    + "-"
+                    + state_hash_df["submitter"].astype(str)
                 )  # Perhaps this should be changed? Filename makes less sense now.
                 master_df["blockchain_epoch"] = state_hash_df["created_at"].apply(
-                    lambda row: int(
-                        calendar.timegm(
-                            datetime.strptime(row, "%Y-%m-%dT%H:%M:%SZ").timetuple()
-                        )
-                        * 1000
-                    )
+                    lambda row: int(row.timestamp() * 1000)
                 )
 
                 state_hash = pd.unique(
@@ -142,6 +173,10 @@ def main():
                     }
                 )
 
+                relation_df, p_selected_node_df = getPreviousStatehash(
+                    connection, logging, bot_log_id
+                )
+                p_map = getRelationList(relation_df)
                 c_selected_node = filterStateHashPercentage(master_df)
                 batch_graph = createGraph(
                     master_df, p_selected_node_df, c_selected_node, p_map
@@ -162,7 +197,7 @@ def main():
                     graph=weighted_graph,
                     queue_list=queue_list,
                     node=queue_list[0],
-                    batch_statehash=batch_state_hash,
+                    # batch_statehash=batch_state_hash, (this used to be here in old code, but it's not used anywhere inside the function)
                 )
                 point_record_df = master_df[
                     master_df["state_hash"].isin(
@@ -203,10 +238,12 @@ def main():
                         cur_batch_end.timestamp(),
                         end - start,
                     )
-                    bot_log_id = createBotLog(connection, values)
+                    bot_log_id = createBotLog(connection, logging, values)
 
                     shortlisted_state_hash_df["bot_log_id"] = bot_log_id
-                    insertStatehashResults(shortlisted_state_hash_df)
+                    insertStatehashResults(
+                        connection, logging, shortlisted_state_hash_df
+                    )
 
                     if not point_record_df.empty:
                         point_record_df["amount"] = 1
@@ -226,7 +263,7 @@ def main():
                             ]
                         ]
 
-                        createPointRecord(connection, point_record_df)
+                        createPointRecord(connection, logging, point_record_df)
                 except Exception as error:
                     connection.rollback()
                     logging.error(ERROR.format(error))
@@ -239,7 +276,10 @@ def main():
                 logging.info("Finished processing data from table.")
             try:
                 updateScoreboard(
-                    connection, cur_batch_end, int(os.environ["UPTIME_DAYS_FOR_SCORE"])
+                    connection,
+                    logging,
+                    cur_batch_end,
+                    int(os.environ["UPTIME_DAYS_FOR_SCORE"]),
                 )
             except Exception as error:
                 connection.rollback()

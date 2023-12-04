@@ -1,8 +1,9 @@
 import os
-import boto3
-from cassandra.cluster import Cluster
-from ssl import SSLContext, CERT_REQUIRED, PROTOCOL_TLS_CLIENT
+from cassandra import ProtocolVersion
 from cassandra.auth import PlainTextAuthProvider
+from cassandra.cluster import Cluster
+from cassandra.policies import DCAwareRoundRobinPolicy
+from ssl import SSLContext, CERT_REQUIRED, PROTOCOL_TLS_CLIENT
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, ByteString, List
@@ -44,6 +45,7 @@ class AWSKeyspacesClient:
         self.cassandra_user = os.environ.get("CASSANDRA_USERNAME")
         self.cassandra_pass = os.environ.get("CASSANDRA_PASSWORD")
         self.aws_ssl_certificate_path = os.environ.get("SSL_CERTFILE")
+        self.cassandra_region = self.cassandra_host.split(".")[1]
 
         self.ssl_context = self._create_ssl_context()
         self.auth_provider = self._create_auth_provider()
@@ -67,6 +69,10 @@ class AWSKeyspacesClient:
             ssl_context=self.ssl_context,
             auth_provider=self.auth_provider,
             port=int(self.cassandra_port),
+            load_balancing_policy=DCAwareRoundRobinPolicy(
+                local_dc=self.cassandra_region
+            ),
+            protocol_version=ProtocolVersion.V4,
         )
 
     def connect(self):
