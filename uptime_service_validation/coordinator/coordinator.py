@@ -300,10 +300,12 @@ def main():
 
             prev_batch_end = cur_batch_end
             cur_batch_end = prev_batch_end + timedelta(minutes=interval)
-            if (
-                prev_batch_end >= cur_timestamp
-            ):  # This gets the coordinator to continue onto the next batch if it's taking so long as for the next interval is already finished.
-                do_process = False
+            if prev_batch_end >= cur_timestamp:
+                logging.warning(
+                    "It seems that batch processing took a bit too long than expected as prev_batch_end: %s >= cur_timestamp: %s... progressing to the next batch anyway...",
+                    prev_batch_end,
+                    cur_timestamp,
+                )
 
 
 if __name__ == "__main__":
