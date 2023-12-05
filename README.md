@@ -4,8 +4,8 @@
 
 ## Overview
 
-This repository is home for Validator/Coordinator component for Mina Delegation Program. 
-This component is responsible for taking submissions data gathered by [uptime-service-backend](https://github.com/MinaFoundation/uptime-service-backend) and running validation against them using [stateles-verification-tool](https://github.com/MinaProtocol/mina/pull/14593). Next, based on these validation results, the Coordinator builds its own database containing uptime score.
+This repository is home for Validator/Coordinator component for Mina Delegation Program.
+This component is responsible for taking submissions data gathered by [uptime-service-backend](https://github.com/MinaFoundation/uptime-service-backend) and running validation against them using [stateless-verification-tool](https://github.com/MinaProtocol/mina/pull/14593). Next, based on these validation results, the Coordinator builds its own database containing uptime score.
 
 
 ## Getting Started
@@ -83,7 +83,7 @@ Create a database and relevant tables before first-time program execution using 
 
 1. **Create database and tables**:
 
-   ```bash
+   ```sh
    invoke create-database
    ```
 
@@ -93,7 +93,7 @@ Create a database and relevant tables before first-time program execution using 
 
    The program requires an entry in `bot_logs`, especially the `batch_end_epoch` column, as a starting point. For first-time runs, create this entry as follows:
 
-   ```bash
+   ```sh
    # Initialize with current timestamp
    invoke init-database
 
@@ -111,17 +111,26 @@ To connect to AWS Keyspaces, the following environment variables need to be set:
 - `AWS_KEYSPACE` - Your AWS Keyspace name.
 - `CASSANDRA_HOST` - Cassandra host (e.g. cassandra.us-west-2.amazonaws.com).
 - `CASSANDRA_PORT` - Cassandra port (e.g. 9142).
-- `CASSANDRA_USERNAME` - Cassandra service user.
-- `CASSANDRA_PASSWORD` - Cassandra service password.
+- `AWS_ACCESS_KEY_ID` - Your AWS Access Key ID.
+- `AWS_SECRET_ACCESS_KEY` - Your AWS Secret Access Key.
+- `AWS_DEFAULT_REGION` - Your AWS Default region. (e.g. us-west-2, it is needed for `stateless-verification-tool`)
 - `SSL_CERTFILE` - The path to your SSL certificate for AWS Keyspaces.
 
 > 🗒️ **Note 1:** For convenience, an SSL certificate is provided in this repository and can be found at [/uptime_service_validation/database/aws_keyspaces/cert/sf-class2-root.crt](/uptime_service_validation/database/aws_keyspaces/cert/sf-class2-root.crt). Alternatively, the certificate can also be downloaded directly from AWS. Detailed instructions for obtaining the certificate are available in the AWS Keyspaces documentation, which you can access [here](https://docs.aws.amazon.com/keyspaces/latest/devguide/using_python_driver.html#using_python_driver.BeforeYouBegin).
 
-> 🗒️ **Note 2:** Docker image already includes cert and has `AWS_SSL_CERTIFICATE_PATH` set up, however it can be overriden by providing this env variable to docker.
+> 🗒️ **Note 2:** Docker image of this program already includes cert and has `SSL_CERTFILE` set up, however it can be overriden by providing this env variable to docker.
 
 ### Test Configuration
 
 By default, the program runs `stateless-verification-tool` in separate Kubernetes pods. For testing purposes, it can be configured to run them as subprocesses on the same machine. Set the optional environment variable `TEST_ENV=1` for this mode.
+
+## Running the program
+
+Once everything is configured we can start the program by running:
+
+```sh
+poetry run start
+```
 
 ## Docker
 
@@ -139,20 +148,21 @@ When running pass all relevant env variables to the docker (see `.env`), e.g.:
 
 ```sh
 docker run -e SURVEY_INTERVAL_MINUTES \
+           -e MINI_BATCH_NUMBER \
+           -e UPTIME_DAYS_FOR_SCORE \
+           -e WORKER_IMAGE \
+           -e WORKER_TAG \
            -e POSTGRES_HOST \
            -e POSTGRES_PORT \
            -e POSTGRES_DB \
            -e POSTGRES_USER \
            -e POSTGRES_PASSWORD \
-           -e MINI_BATCH_NUMBER \
-           -e UPTIME_DAYS_FOR_SCORE \
-           -e WORKER_TAG \
-           -e WORKER_IMAGE \
            -e AWS_KEYSPACE \
            -e CASSANDRA_HOST \
            -e CASSANDRA_PORT \
-           -e CASSANDRA_USERNAME \
-           -e CASSANDRA_PASSWORD \
+           -e AWS_ACCESS_KEY_ID \
+           -e AWS_SECRET_ACCESS_KEY \
+           -e AWS_DEFAULT_REGION \
            -e SSL_CERTFILE \
            uptime-service-validation
 ```
