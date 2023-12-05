@@ -7,7 +7,7 @@ import psycopg2
 from kubernetes import config
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
-from time import time
+from time import sleep, time
 from dataclasses import asdict
 from uptime_service_validation.coordinator.helper import *
 from uptime_service_validation.coordinator.server import (
@@ -57,13 +57,14 @@ def main():
     prev_batch_end, cur_batch_end, bot_log_id = getBatchTimings(
         connection, logging, interval
     )
-    cur_timestamp = datetime.now(timezone.utc)
 
-    logging.info(
-        "script start at {0}  end at {1}".format(prev_batch_end, cur_timestamp)
-    )
-    do_process = True
-    while do_process:
+    while True:
+        cur_timestamp = datetime.now(timezone.utc)
+        logging.info(
+            "iteration start at: {0}, cur_timestamp: {1}".format(
+                prev_batch_end, cur_timestamp
+            )
+        )
         existing_state_df = getStatehashDF(connection, logging)
         existing_nodes = getExistingNodes(connection, logging)
         logging.info(
@@ -71,8 +72,15 @@ def main():
         )
 
         if cur_batch_end > cur_timestamp:
-            logging.info("all files are processed till date")
-            return
+            delta = timedelta(minutes=2)
+            sleep_interval = (cur_batch_end - cur_timestamp) + delta
+            time_until = cur_timestamp + sleep_interval
+            logging.info(
+                "all submissions are processed till date. Will wait %s (until %s) before starting next batch...",
+                sleep_interval,
+                time_until,
+            )
+            sleep(sleep_interval.total_seconds())
         else:
             master_df = pd.DataFrame()
             # Step 2 Create time ranges:
@@ -297,10 +305,12 @@ def main():
 
             prev_batch_end = cur_batch_end
             cur_batch_end = prev_batch_end + timedelta(minutes=interval)
-            if (
-                prev_batch_end >= cur_timestamp
-            ):  # This gets the coordinator to continue onto the next batch if it's taking so long as for the next interval is already finished.
-                do_process = False
+            if prev_batch_end >= cur_timestamp:
+                logging.warning(
+                    "It seems that batch processing took a bit too long than expected as prev_batch_end: %s >= cur_timestamp: %s... progressing to the next batch anyway...",
+                    prev_batch_end,
+                    cur_timestamp,
+                )
 
 
 if __name__ == "__main__":
