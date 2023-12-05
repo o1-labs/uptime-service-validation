@@ -57,11 +57,14 @@ def main():
     prev_batch_end, cur_batch_end, bot_log_id = getBatchTimings(
         connection, logging, interval
     )
-    cur_timestamp = datetime.now(timezone.utc)
 
-    logging.info("script start at {0} end at {1}".format(prev_batch_end, cur_timestamp))
-    do_process = True
-    while do_process:
+    while True:
+        cur_timestamp = datetime.now(timezone.utc)
+        logging.info(
+            "iteration start at: {0}, cur_timestamp: {1}".format(
+                prev_batch_end, cur_timestamp
+            )
+        )
         existing_state_df = getStatehashDF(connection, logging)
         existing_nodes = getExistingNodes(connection, logging)
         logging.info(
@@ -69,13 +72,15 @@ def main():
         )
 
         if cur_batch_end > cur_timestamp:
-            sleep_interval = cur_batch_end - cur_timestamp
+            delta = timedelta(minutes=2)
+            sleep_interval = (cur_batch_end - cur_timestamp) + delta
+            time_until = cur_timestamp + sleep_interval
             logging.info(
-                "all submissions are processed till date. Need to wait %s before starting next batch...",
+                "all submissions are processed till date. Will wait %s (until %s) before starting next batch...",
                 sleep_interval,
+                time_until,
             )
             sleep(sleep_interval.total_seconds())
-            cur_timestamp = datetime.now(timezone.utc)
         else:
             master_df = pd.DataFrame()
             # Step 2 Create time ranges:
