@@ -110,12 +110,20 @@ def main():
             )
 
             webhookURL = os.environ.get("WEBHOOK_URL")
-            if (webhookURL != None):
-                if (end - start < float(os.environ["ALARM_ZK_LOWER_LIMIT_SEC"])): 
-                    sendSlackMessage(webhookURL, f'ZkApp Validation took {end- start} seconds, which is too quick', logging)
-                if (end - start > float(os.environ["ALARM_ZK_UPPER_LIMIT_SEC"])): 
-                    sendSlackMessage(webhookURL, f'ZkApp Validation took {end- start} seconds, which is too long', logging)
-                    
+            if webhookURL != None:
+                if end - start < float(os.environ["ALARM_ZK_LOWER_LIMIT_SEC"]):
+                    sendSlackMessage(
+                        webhookURL,
+                        f"ZkApp Validation took {end- start} seconds, which is too quick",
+                        logging,
+                    )
+                if end - start > float(os.environ["ALARM_ZK_UPPER_LIMIT_SEC"]):
+                    sendSlackMessage(
+                        webhookURL,
+                        f"ZkApp Validation took {end- start} seconds, which is too long",
+                        logging,
+                    )
+
             submissions = []
             cassandra = AWSKeyspacesClient()
             try:
@@ -262,9 +270,11 @@ def main():
                     )
 
                     if not point_record_df.empty:
-                        point_record_df["amount"] = 1
-                        point_record_df["created_at"] = datetime.now(timezone.utc)
-                        point_record_df["bot_log_id"] = bot_log_id
+                        point_record_df.loc[:, "amount"] = 1
+                        point_record_df.loc[:, "created_at"] = datetime.now(
+                            timezone.utc
+                        )
+                        point_record_df.loc[:, "bot_log_id"] = bot_log_id
                         point_record_df = point_record_df[
                             [
                                 "file_name",
