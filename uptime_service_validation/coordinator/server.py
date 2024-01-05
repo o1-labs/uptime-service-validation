@@ -29,17 +29,19 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
         # Define the environment variables
         env_vars = [
             client.V1EnvVar(
+                name="CQLSH", value=os.environ.get("CQLSH")
+            ),
+            client.V1EnvVar(
+                name="DELEGATION_VERIFY_AWS_ROLE_ARN", value=os.environ.get("DELEGATION_VERIFY_AWS_ROLE_ARN")
+            ),
+            client.V1EnvVar(
+                name="DELEGATION_VERIFY_AWS_ROLE_SESSION_NAME", value=os.environ.get("DELEGATION_VERIFY_AWS_ROLE_SESSION_NAME")
+            ),
+            client.V1EnvVar(
                 name="CASSANDRA_HOST", value=os.environ.get("CASSANDRA_HOST")
             ),
             client.V1EnvVar(
                 name="CASSANDRA_PORT", value=os.environ.get("CASSANDRA_PORT")
-            ),
-            client.V1EnvVar(
-                name="AWS_ACCESS_KEY_ID", value=os.environ.get("AWS_ACCESS_KEY_ID")
-            ),
-            client.V1EnvVar(
-                name="AWS_SECRET_ACCESS_KEY",
-                value=os.environ.get("AWS_SECRET_ACCESS_KEY"),
             ),
             client.V1EnvVar(
                 name="AWS_DEFAULT_REGION", value=os.environ.get("AWS_DEFAULT_REGION")
@@ -48,23 +50,51 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                 name="SSL_CERTFILE", value="/.cassandra/sf-class2-root.crt"
             ),
             client.V1EnvVar(name="CASSANDRA_USE_SSL", value="1"),
+            client.V1EnvVar(
+                name="AUTH_VOLUME_MOUNT_PATH", value=os.environ.get("AUTH_VOLUME_MOUNT_PATH")
+            ),
         ]
 
+        # Define the volumes
+        auth_volume = client.V1Volume(
+            name = "auth-volume",
+            empty_dir = client.V1EmptyDirVolumeSource(),
+        )
+
+        # Define the volueMounts
+        auth_volume_mount = client.V1VolumeMount(
+            name = "auth-volume",
+            mount_path = os.environ.get("AUTH_VOLUME_MOUNT_PATH"),
+        )
+
         # Define the container
+
         container = client.V1Container(
             name="stateless-verification-tool",
             image=f"{worker_image}:{worker_tag}",
-            command=["/bin/delegation-verify"],
+            command=["/bin/sh", "-c", "source /var/mina-delegation-verify-auth/.env && /bin/delegation-verify"],
             args=[
                 "cassandra",
                 "--keyspace",
                 os.environ.get("AWS_KEYSPACE"),
                 datetime_formatter(mini_batch[0]),
                 datetime_formatter(mini_batch[1]),
-                # "--no-check",
+                "--no-check",
             ],
             env=env_vars,
             image_pull_policy=os.environ.get("IMAGE_PULL_POLICY", "IfNotPresent"),
+            volume_mounts=[auth_volume_mount],
+        )
+
+        # Define the init container
+
+        init_container = client.V1InitContainer(
+            name="stateless-verification-tool-init",
+            image=f"{worker_image}:{worker_tag}",
+            command=["/bin/authenticate.sh"],
+            env=env_vars,
+            image_pull_policy=os.environ.get("IMAGE_PULL_POLICY", "IfNotPresent"),
+            volume_mounts=[auth_volume_mount],
         )
 
         # Job name
@@ -78,7 +108,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
             spec=client.V1JobSpec(
                 template=client.V1PodTemplateSpec(
                     spec=client.V1PodSpec(
-                        containers=[container], restart_policy="Never"
+                        containers=[container, init_container], restart_policy="Never"
                     )
                 )
             ),
