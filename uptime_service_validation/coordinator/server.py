@@ -23,6 +23,11 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
         open("/var/run/secrets/kubernetes.io/serviceaccount/namespace").read().strip()
     )
 
+    platform = os.environ.get("PLATFORM")
+    testnet = os.environ.get("TESTNET")
+
+    service_account_name = f"{platform}-{testnet}-delegation-verify"
+
     # List to keep track of job names
     jobs = []
 
@@ -55,6 +60,14 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                 name="AUTH_VOLUME_MOUNT_PATH", value=os.environ.get("AUTH_VOLUME_MOUNT_PATH")
             ),
         ]
+
+        # Define the serviceaccount
+        service_account = client.V1ServiceAccount(
+            metadata =  client.V1ObjectMeta(
+                name=service_account_name,
+                annotations=dict("eks.amazonaws.com/role-arn"="arn:aws:iam::673156464838:role/s3-block-producers-uptime-staging-berkeley")
+            )
+        )
 
         # Define the volumes
         auth_volume = client.V1Volume(
@@ -109,7 +122,9 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
             spec=client.V1JobSpec(
                 template=client.V1PodTemplateSpec(
                     spec=client.V1PodSpec(
-                        containers=[container, init_container], restart_policy="Never"
+                        containers=[container, init_container], 
+                        restart_policy="Never",
+                        service_account_name=service_account_name
                     )
                 )
             ),
