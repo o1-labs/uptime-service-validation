@@ -64,7 +64,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
         service_account = client.V1ServiceAccount(
             metadata =  client.V1ObjectMeta(
                 name=service_account_name,
-                annotations=dict("eks.amazonaws.com/role-arn"="arn:aws:iam::673156464838:role/s3-block-producers-uptime-staging-berkeley")
+                annotations=dict({"eks.amazonaws.com/role-arn": f"arn:aws:iam::673156464838:role/delegation-verify-{platform}-{testnet}"})
             )
         )
 
