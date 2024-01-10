@@ -102,7 +102,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
 
         # Define the init container
 
-        init_container = client.V1InitContainer(
+        init_container = client.V1Container(
             name="stateless-verification-tool-init",
             image=f"{worker_image}:{worker_tag}",
             command=["/bin/authenticate.sh"],
@@ -122,7 +122,8 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
             spec=client.V1JobSpec(
                 template=client.V1PodTemplateSpec(
                     spec=client.V1PodSpec(
-                        containers=[container, init_container], 
+                        init_containers=[init_container],
+                        containers=[container], 
                         restart_policy="Never",
                         service_account_name=service_account_name
                     )
