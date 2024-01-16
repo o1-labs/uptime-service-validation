@@ -99,6 +99,8 @@ def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
             "-e",
             "AWS_S3_BUCKET",
             "-e",
+            "NETWORK_NAME",
+            "-e",
             "SSL_CERTFILE=/var/ssl/ssl-cert.crt",
             "-e",
             "CASSANDRA_USE_SSL=1",
