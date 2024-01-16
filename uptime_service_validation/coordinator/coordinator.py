@@ -1,7 +1,6 @@
 import sys
 import os
 import logging
-import calendar
 import pandas as pd
 import psycopg2
 from kubernetes import config
