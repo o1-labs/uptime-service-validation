@@ -41,11 +41,10 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
     for index, mini_batch in enumerate(time_intervals):
         # Define the environment variables
         env_vars = [
+            client.V1EnvVar(name="CQLSH", value=os.environ.get("CQLSH")),
             client.V1EnvVar(
-                name="CQLSH", value=os.environ.get("CQLSH")
-            ),
-            client.V1EnvVar(
-                name="AWS_ROLE_SESSION_NAME", value=os.environ.get("AWS_ROLE_SESSION_NAME").rstrip("-coordinator")
+                name="AWS_ROLE_SESSION_NAME",
+                value=os.environ.get("AWS_ROLE_SESSION_NAME").rstrip("-coordinator"),
             ),
             client.V1EnvVar(
                 name="CASSANDRA_HOST", value=os.environ.get("CASSANDRA_HOST")
@@ -53,9 +52,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
             client.V1EnvVar(
                 name="CASSANDRA_PORT", value=os.environ.get("CASSANDRA_PORT")
             ),
-            client.V1EnvVar(
-                name="AWS_REGION", value=os.environ.get("AWS_REGION")
-            ),
+            client.V1EnvVar(name="AWS_REGION", value=os.environ.get("AWS_REGION")),
             client.V1EnvVar(
                 name="AWS_DEFAULT_REGION", value=os.environ.get("AWS_REGION")
             ),
@@ -64,16 +61,19 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
             ),
             client.V1EnvVar(name="CASSANDRA_USE_SSL", value="1"),
             client.V1EnvVar(
-                name="AUTH_VOLUME_MOUNT_PATH", value=os.environ.get("AUTH_VOLUME_MOUNT_PATH")
+                name="AUTH_VOLUME_MOUNT_PATH",
+                value=os.environ.get("AUTH_VOLUME_MOUNT_PATH"),
             ),
         ]
-        
+
         # Variables and script for entrypoint configmap
         keyspace = os.environ.get("AWS_KEYSPACE")
         start_timestamp = datetime_formatter(mini_batch[0]).replace(" ", "\ ")
         end_timestamp = datetime_formatter(mini_batch[1]).replace(" ", "\ ")
 
-        configmap_name_suffix = str(''.join(random.choices(string.ascii_lowercase + string.digits, k=5)))
+        configmap_name_suffix = str(
+            "".join(random.choices(string.ascii_lowercase + string.digits, k=5))
+        )
 
         script_content = f"""#!/bin/bash
 set -x
@@ -83,43 +83,47 @@ env
 """
 
         # Entrypoint configmap name
-        entrypoint_configmap_name = f"delegation-verify-entrypoint-configmap-{configmap_name_suffix}"
+        entrypoint_configmap_name = (
+            f"delegation-verify-entrypoint-configmap-{configmap_name_suffix}"
+        )
 
         # Entrypoint configmap
         entrypoint = client.V1ConfigMap(
-            api_version = "v1",
-            kind = "ConfigMap",
+            api_version="v1",
+            kind="ConfigMap",
             metadata=client.V1ObjectMeta(name=entrypoint_configmap_name),
-            data = {"entrypoint.sh": script_content},
+            data={"entrypoint.sh": script_content},
         )
 
         # Define the volumes
         auth_volume = client.V1Volume(
-            name = "auth-volume",
-            empty_dir = client.V1EmptyDirVolumeSource(),
+            name="auth-volume",
+            empty_dir=client.V1EmptyDirVolumeSource(),
         )
 
         entrypoint_volume = client.V1Volume(
-            name = "entrypoint-volume",
-            config_map=client.V1ConfigMapVolumeSource(name=entrypoint_configmap_name, default_mode=int("0777",8)), # 0777 permission in octal as int
+            name="entrypoint-volume",
+            config_map=client.V1ConfigMapVolumeSource(
+                name=entrypoint_configmap_name, default_mode=int("0777", 8)
+            ),  # 0777 permission in octal as int
         )
 
         # Define the volumeMounts
         auth_volume_mount = client.V1VolumeMount(
-            name = "auth-volume",
-            mount_path = os.environ.get("AUTH_VOLUME_MOUNT_PATH"),
+            name="auth-volume",
+            mount_path=os.environ.get("AUTH_VOLUME_MOUNT_PATH"),
         )
 
         entrypoint_volume_mount = client.V1VolumeMount(
-            name = "entrypoint-volume",
-            mount_path = "/bin/entrypoint",
+            name="entrypoint-volume",
+            mount_path="/bin/entrypoint",
         )
 
         # Define the container
         container = client.V1Container(
-            name = "delegation-verify",
-            image = f"{worker_image}:{worker_tag}",
-            command = ["/bin/entrypoint/entrypoint.sh"],
+            name="delegation-verify",
+            image=f"{worker_image}:{worker_tag}",
+            command=["/bin/entrypoint/entrypoint.sh"],
             env=env_vars,
             image_pull_policy=os.environ.get("IMAGE_PULL_POLICY", "IfNotPresent"),
             volume_mounts=[auth_volume_mount, entrypoint_volume_mount],
@@ -146,11 +150,12 @@ env
             spec=client.V1JobSpec(
                 template=client.V1PodTemplateSpec(
                     spec=client.V1PodSpec(
+                        hostNetwork=True,
                         init_containers=[init_container],
-                        containers=[container], 
+                        containers=[container],
                         restart_policy="Never",
                         service_account_name=service_account_name,
-                        volumes=[auth_volume, entrypoint_volume]
+                        volumes=[auth_volume, entrypoint_volume],
                     )
                 )
             ),
@@ -159,7 +164,9 @@ env
         # Create the job in Kubernetes
         try:
             api_core.create_namespaced_config_map(namespace, entrypoint)
-            logging.info(f"ConfigMap {entrypoint_configmap_name} created in namespace {namespace}")
+            logging.info(
+                f"ConfigMap {entrypoint_configmap_name} created in namespace {namespace}"
+            )
             configmaps.append(entrypoint_configmap_name)
             api_batch.create_namespaced_job(namespace, job)
             logging.info(f"Job {job_name} created in namespace {namespace}")
