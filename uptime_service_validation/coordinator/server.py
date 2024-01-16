@@ -6,6 +6,8 @@ import os
 from datetime import datetime, timezone
 import subprocess
 import time
+import string
+import random
 
 
 # Format datetime such as it is accepted by the stateless validator
@@ -18,7 +20,9 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
     config.load_incluster_config()
     # config.load_kube_config()
 
-    api = client.BatchV1Api()
+    api_core = client.CoreV1Api()
+    api_batch = client.BatchV1Api()
+
     namespace = (
         open("/var/run/secrets/kubernetes.io/serviceaccount/namespace").read().strip()
     )
@@ -31,6 +35,9 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
     # List to keep track of job names
     jobs = []
 
+    # List to keep track of config maps
+    configmaps = []
+
     for index, mini_batch in enumerate(time_intervals):
         # Define the environment variables
         env_vars = [
@@ -38,10 +45,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                 name="CQLSH", value=os.environ.get("CQLSH")
             ),
             client.V1EnvVar(
-                name="DELEGATION_VERIFY_AWS_ROLE_ARN", value=os.environ.get("DELEGATION_VERIFY_AWS_ROLE_ARN")
-            ),
-            client.V1EnvVar(
-                name="DELEGATION_VERIFY_AWS_ROLE_SESSION_NAME", value=os.environ.get("DELEGATION_VERIFY_AWS_ROLE_SESSION_NAME")
+                name="AWS_ROLE_SESSION_NAME", value=os.environ.get("AWS_ROLE_SESSION_NAME").rstrip("-coordinator")
             ),
             client.V1EnvVar(
                 name="CASSANDRA_HOST", value=os.environ.get("CASSANDRA_HOST")
@@ -50,7 +54,10 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                 name="CASSANDRA_PORT", value=os.environ.get("CASSANDRA_PORT")
             ),
             client.V1EnvVar(
-                name="AWS_DEFAULT_REGION", value=os.environ.get("AWS_DEFAULT_REGION")
+                name="AWS_REGION", value=os.environ.get("AWS_REGION")
+            ),
+            client.V1EnvVar(
+                name="AWS_DEFAULT_REGION", value=os.environ.get("AWS_REGION")
             ),
             client.V1EnvVar(
                 name="SSL_CERTFILE", value="/.cassandra/sf-class2-root.crt"
@@ -60,13 +67,30 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                 name="AUTH_VOLUME_MOUNT_PATH", value=os.environ.get("AUTH_VOLUME_MOUNT_PATH")
             ),
         ]
+        
+        # Variables and script for entrypoint configmap
+        keyspace = os.environ.get("AWS_KEYSPACE")
+        start_timestamp = datetime_formatter(mini_batch[0]).replace(" ", "\ ")
+        end_timestamp = datetime_formatter(mini_batch[1]).replace(" ", "\ ")
 
-        # Define the serviceaccount
-        service_account = client.V1ServiceAccount(
-            metadata =  client.V1ObjectMeta(
-                name=service_account_name,
-                annotations=dict({"eks.amazonaws.com/role-arn": f"arn:aws:iam::673156464838:role/delegation-verify-{platform}-{testnet}"})
-            )
+        configmap_name_suffix = str(''.join(random.choices(string.ascii_lowercase + string.digits, k=5)))
+
+        script_content = f"""#!/bin/bash
+set -x
+source /var/mina-delegation-verify-auth/.env
+env
+/bin/delegation-verify cassandra --keyspace {keyspace} {start_timestamp} {end_timestamp} --no-check
+"""
+
+        # Entrypoint configmap name
+        entrypoint_configmap_name = f"delegation-verify-entrypoint-configmap-{configmap_name_suffix}"
+
+        # Entrypoint configmap
+        entrypoint = client.V1ConfigMap(
+            api_version = "v1",
+            kind = "ConfigMap",
+            metadata=client.V1ObjectMeta(name=entrypoint_configmap_name),
+            data = {"entrypoint.sh": script_content},
         )
 
         # Define the volumes
@@ -75,35 +99,35 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
             empty_dir = client.V1EmptyDirVolumeSource(),
         )
 
-        # Define the volueMounts
+        entrypoint_volume = client.V1Volume(
+            name = "entrypoint-volume",
+            config_map=client.V1ConfigMapVolumeSource(name=entrypoint_configmap_name, default_mode=int("0777",8)), # 0777 permission in octal as int
+        )
+
+        # Define the volumeMounts
         auth_volume_mount = client.V1VolumeMount(
             name = "auth-volume",
             mount_path = os.environ.get("AUTH_VOLUME_MOUNT_PATH"),
         )
 
-        # Define the container
+        entrypoint_volume_mount = client.V1VolumeMount(
+            name = "entrypoint-volume",
+            mount_path = "/bin/entrypoint",
+        )
 
+        # Define the container
         container = client.V1Container(
-            name="stateless-verification-tool",
-            image=f"{worker_image}:{worker_tag}",
-            command=["/bin/sh", "-c", "source /var/mina-delegation-verify-auth/.env && /bin/delegation-verify"],
-            args=[
-                "cassandra",
-                "--keyspace",
-                os.environ.get("AWS_KEYSPACE"),
-                datetime_formatter(mini_batch[0]),
-                datetime_formatter(mini_batch[1]),
-                "--no-check",
-            ],
+            name = "delegation-verify",
+            image = f"{worker_image}:{worker_tag}",
+            command = ["/bin/entrypoint/entrypoint.sh"],
             env=env_vars,
             image_pull_policy=os.environ.get("IMAGE_PULL_POLICY", "IfNotPresent"),
-            volume_mounts=[auth_volume_mount],
+            volume_mounts=[auth_volume_mount, entrypoint_volume_mount],
         )
 
         # Define the init container
-
         init_container = client.V1Container(
-            name="stateless-verification-tool-init",
+            name="delegation-verify-init",
             image=f"{worker_image}:{worker_tag}",
             command=["/bin/authenticate.sh"],
             env=env_vars,
@@ -112,7 +136,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
         )
 
         # Job name
-        job_name = f"stateless-verification-tool-{datetime.now(timezone.utc).strftime('%y-%m-%d-%H-%M')}-{index}"
+        job_name = f"delegation-verify-{datetime.now(timezone.utc).strftime('%y-%m-%d-%H-%M')}-{index}"
 
         # Create the job
         job = client.V1Job(
@@ -125,7 +149,8 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                         init_containers=[init_container],
                         containers=[container], 
                         restart_policy="Never",
-                        service_account_name=service_account_name
+                        service_account_name=service_account_name,
+                        volumes=[auth_volume, entrypoint_volume]
                     )
                 )
             ),
@@ -133,7 +158,10 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
 
         # Create the job in Kubernetes
         try:
-            api.create_namespaced_job(namespace, job)
+            api_core.create_namespaced_config_map(namespace, entrypoint)
+            logging.info(f"ConfigMap {entrypoint_configmap_name} created in namespace {namespace}")
+            configmaps.append(entrypoint_configmap_name)
+            api_batch.create_namespaced_job(namespace, job)
             logging.info(f"Job {job_name} created in namespace {namespace}")
             jobs.append(job_name)
         except Exception as e:
@@ -143,7 +171,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
     while jobs:
         for job_name in list(jobs):
             try:
-                job_status = api.read_namespaced_job_status(job_name, namespace)
+                job_status = api_batch.read_namespaced_job_status(job_name, namespace)
                 if job_status.status.succeeded:
                     logging.info(f"Job {job_name} succeeded.")
                     jobs.remove(job_name)
