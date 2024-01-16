@@ -117,7 +117,7 @@ To connect to AWS Keyspaces, the following environment variables need to be set:
 - `AWS_DEFAULT_REGION` - Your AWS Default region. (e.g. us-west-2, it is needed for `stateless-verification-tool`)
 - `AWS_S3_BUCKET` - AWS S3 Bucket (needed for `stateless-verification-tool`)
 - `NETWORK_NAME` - Network name (needed for `stateless-verification-tool`, in case block does not exist in Cassandra 
-                   it attempts to donwload it from AWS S3 from `AWS_S3_BUCKET`\`NETWORK_NAME`\blocks)
+                   it attempts to download it from AWS S3 from `AWS_S3_BUCKET`\\`NETWORK_NAME`\blocks)
 - `SSL_CERTFILE` - The path to your SSL certificate for AWS Keyspaces.
 
 > 🗒️ **Note 1:** For convenience, an SSL certificate is provided in this repository and can be found at [/uptime_service_validation/database/aws_keyspaces/cert/sf-class2-root.crt](/uptime_service_validation/database/aws_keyspaces/cert/sf-class2-root.crt). Alternatively, the certificate can also be downloaded directly from AWS. Detailed instructions for obtaining the certificate are available in the AWS Keyspaces documentation, which you can access [here](https://docs.aws.amazon.com/keyspaces/latest/devguide/using_python_driver.html#using_python_driver.BeforeYouBegin).
