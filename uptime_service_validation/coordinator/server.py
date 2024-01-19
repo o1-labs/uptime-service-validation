@@ -17,7 +17,6 @@ def datetime_formatter(dt):
 def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
     # Configuring Kubernetes client
     config.load_incluster_config()
-    # config.load_kube_config()
 
     api_core = client.CoreV1Api()
     api_batch = client.BatchV1Api()
@@ -30,6 +29,11 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
     testnet = os.environ.get("TESTNET")
 
     service_account_name = f"{platform}-{testnet}-delegation-verify"
+
+    worker_cpu_request = os.environ.get("WORKER_CPU_REQUEST")
+    worker_memory_request = os.environ.get("WORKER_MEMORY_REQUEST")
+    worker_cpu_limit = os.environ.get("WORKER_CPU_LIMIT")
+    worker_memory_limit = os.environ.get("WORKER_MEMORY_LIMIT")
 
     # List to keep track of job names
     jobs = []
@@ -56,7 +60,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                 name="AWS_DEFAULT_REGION", value=os.environ.get("AWS_REGION")
             ),
             client.V1EnvVar(
-                name="SSL_CERTFILE", value="/.cassandra/sf-class2-root.crt"
+                name="SSL_CERTFILE", value=os.environ.get("SSL_CERTFILE")
             ),
             client.V1EnvVar(name="CASSANDRA_USE_SSL", value="1"),
             client.V1EnvVar(
@@ -69,16 +73,58 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
         keyspace = os.environ.get("AWS_KEYSPACE")
         start_timestamp = datetime_formatter(mini_batch[0]).replace(" ", "\ ")
         end_timestamp = datetime_formatter(mini_batch[1]).replace(" ", "\ ")
-
+        
+        # Unique names are needed for the configmaps
         configmap_name_suffix = str(
             "".join(random.choices(string.ascii_lowercase + string.digits, k=5))
         )
 
+        # The entrypoint script does the following
+        # Sources necessary credentials
+        # Resolves the domain name of the database host with nslookup
+        # Because for some unknown reason when resolving it throught the cqlsh binary the consistency of this working is lower than 50%
+        # If nslookup failed retries and if it succeded to get an ip address executes the command
+
         script_content = f"""#!/bin/bash
-set -x
+
+# Source credentials for AWS
 source /var/mina-delegation-verify-auth/.env
-env
-/bin/delegation-verify cassandra --keyspace {keyspace} {start_timestamp} {end_timestamp} --no-check
+
+max_retries=5
+retries=0
+dns_name=$CASSANDRA_HOST
+ip_address=""
+
+while [ $retries -lt $max_retries ]; do
+    # Perform nslookup and capture the output
+    nslookup_result=$(nslookup $dns_name 2>/dev/null)
+
+    # Check if nslookup was successful (exit code 0)
+    if [ $? -eq 0 ]; then
+        # Extract IP address from nslookup result
+        ip_addresses=($(echo "$nslookup_result" | awk '/^Address: / {{print $2}}'))
+
+        # Check if IP address is not empty
+        if [ ${{#ip_addresses[@]}} -gt 0 ]; then
+            break
+        fi
+    fi
+
+    # Increment retry count
+    ((retries++))
+
+    # If not successful, wait for a moment before retrying
+    sleep 2
+done
+
+# Use the result
+if [ ${{#ip_addresses[@]}} -gt 0 ]; then
+    CASSANDRA_HOST=${{ip_addresses[0]}}
+    /bin/delegation-verify cassandra --keyspace {keyspace} {start_timestamp} {end_timestamp} --no-check
+else
+    echo "DNS resolution failed after $max_retries retries."
+fi
+
 """
 
         # Entrypoint configmap name
@@ -118,11 +164,18 @@ env
             mount_path="/bin/entrypoint",
         )
 
+        # Define resources for app and init container
+        resource_requirements_container = client.V1ResourceRequirements(
+            limits={"cpu": worker_cpu_limit, "memory": worker_memory_limit},
+            requests={"cpu": worker_cpu_request, "memory": worker_memory_request}
+        )
+
         # Define the container
         container = client.V1Container(
             name="delegation-verify",
             image=f"{worker_image}:{worker_tag}",
             command=["/bin/entrypoint/entrypoint.sh"],
+            resources=resource_requirements_container,
             env=env_vars,
             image_pull_policy=os.environ.get("IMAGE_PULL_POLICY", "IfNotPresent"),
             volume_mounts=[auth_volume_mount, entrypoint_volume_mount],
@@ -149,7 +202,6 @@ env
             spec=client.V1JobSpec(
                 template=client.V1PodTemplateSpec(
                     spec=client.V1PodSpec(
-                        hostNetwork=True,
                         init_containers=[init_container],
                         containers=[container],
                         restart_policy="Never",
@@ -160,7 +212,7 @@ env
             ),
         )
 
-        # Create the job in Kubernetes
+        # Create the job and configmap in Kubernetes
         try:
             api_core.create_namespaced_config_map(namespace, entrypoint)
             logging.info(
@@ -190,7 +242,16 @@ env
         time.sleep(10)
 
     logging.info("All jobs have been processed.")
+    
+    while configmaps:
+        for configmap_name in list(configmaps):
+            try:
+                api_core.delete_namespaced_config_map(configmap_name, namespace)
+                configmaps.remove(configmap_name)
+            except Exception as e:
+                logging.error(f"Error deleting config map for {configmap_name}: {e}")
 
+    logging.info("Configmaps have been deleted.")
 
 def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
     processes = []
