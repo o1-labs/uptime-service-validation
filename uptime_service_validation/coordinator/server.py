@@ -1,4 +1,5 @@
 import logging
+import socket
 import sys
 from kubernetes import client
 import os
@@ -77,17 +78,18 @@ def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
             f"local-validator-{datetime.now().strftime('%y-%m-%d-%H-%M')}-{index}"
         )
         image = f"{worker_image}:{worker_tag}"
+        cassandra_ip = socket.gethostbyname(os.environ.get("CASSANDRA_HOST"))
         command = [
             "docker",
             "run",
-            "--privileged",
-            "--network",
-            "host",
+            # "--privileged",
+            # "--network",
+            # "host",
             "--rm",
             "-v",
             f"{os.environ.get('SSL_CERTFILE')}:/var/ssl/ssl-cert.crt",
             "-e",
-            "CASSANDRA_HOST",
+            f"CASSANDRA_HOST={cassandra_ip}",
             "-e",
             "CASSANDRA_PORT",
             "-e",
