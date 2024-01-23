@@ -13,7 +13,6 @@ import random
 def datetime_formatter(dt):
     return dt.strftime("%Y-%m-%d %H:%M:%S.%f")[:-5] + "+0000"
 
-
 def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
     # Configuring Kubernetes client
     config.load_incluster_config()
@@ -26,9 +25,9 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
     )
 
     platform = os.environ.get("PLATFORM")
-    testnet = os.environ.get("TESTNET")
+    network_name = os.environ.get("NETWORK_NAME")
 
-    service_account_name = f"{platform}-{testnet}-delegation-verify"
+    service_account_name = f"{platform}-{network_name}-delegation-verify"
 
     worker_cpu_request = os.environ.get("WORKER_CPU_REQUEST")
     worker_memory_request = os.environ.get("WORKER_MEMORY_REQUEST")
@@ -38,107 +37,69 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
     # List to keep track of job names
     jobs = []
 
-    # List to keep track of config maps
-    configmaps = []
-
     for index, mini_batch in enumerate(time_intervals):
         # Define the environment variables
         env_vars = [
-            client.V1EnvVar(name="CQLSH", value=os.environ.get("CQLSH")),
             client.V1EnvVar(
                 name="AWS_ROLE_SESSION_NAME",
                 value=os.environ.get("AWS_ROLE_SESSION_NAME").rstrip("-coordinator"),
             ),
             client.V1EnvVar(
-                name="CASSANDRA_HOST", value=os.environ.get("CASSANDRA_HOST")
+                name="AWS_REGION",
+                value=os.environ.get("AWS_REGION"),
             ),
             client.V1EnvVar(
-                name="CASSANDRA_PORT", value=os.environ.get("CASSANDRA_PORT")
-            ),
-            client.V1EnvVar(name="AWS_REGION", value=os.environ.get("AWS_REGION")),
-            client.V1EnvVar(
-                name="AWS_DEFAULT_REGION", value=os.environ.get("AWS_REGION")
+                name="AWS_DEFAULT_REGION",
+                value=os.environ.get("AWS_REGION"),
             ),
             client.V1EnvVar(
-                name="SSL_CERTFILE", value=os.environ.get("SSL_CERTFILE")
+                name="AWS_KEYSPACE",
+                value=os.environ.get("AWS_KEYSPACE"),
             ),
-            client.V1EnvVar(name="CASSANDRA_USE_SSL", value="1"),
+            client.V1EnvVar(
+                name="AWS_S3_BUCKET",
+                value=os.environ.get("AWS_S3_BUCKET"),
+            ),
+           client.V1EnvVar(
+                name="CASSANDRA_HOST",
+                value=os.environ.get("CASSANDRA_HOST"),
+            ),
+            client.V1EnvVar(
+                name="CASSANDRA_PORT",
+                value=os.environ.get("CASSANDRA_PORT"),
+            ),
+            client.V1EnvVar(
+                name="CASSANDRA_USE_SSL",
+                value="1"
+            ),
+            client.V1EnvVar(
+                name="SSL_CERTFILE",
+                value=os.environ.get("SSL_CERTFILE"),
+            ),
+            client.V1EnvVar(
+                name="CQLSH",
+                value=os.environ.get("CQLSH"),
+            ),
             client.V1EnvVar(
                 name="AUTH_VOLUME_MOUNT_PATH",
                 value=os.environ.get("AUTH_VOLUME_MOUNT_PATH"),
             ),
+            client.V1EnvVar(
+                name="NETWORK_NAME",
+                value=os.environ.get("NETWORK_NAME"),
+            ),
+            client.V1EnvVar(
+                name="START_TIMESTAMP",
+                value=datetime_formatter(mini_batch[0]),
+            ),
+            client.V1EnvVar(
+                name="END_TIMESTAMP",
+                value=datetime_formatter(mini_batch[1]),
+            ),
         ]
 
-        # Variables and script for entrypoint configmap
-        keyspace = os.environ.get("AWS_KEYSPACE")
-        start_timestamp = datetime_formatter(mini_batch[0]).replace(" ", "\ ")
-        end_timestamp = datetime_formatter(mini_batch[1]).replace(" ", "\ ")
-        
-        # Unique names are needed for the configmaps
-        configmap_name_suffix = str(
-            "".join(random.choices(string.ascii_lowercase + string.digits, k=5))
-        )
-
-        # The entrypoint script does the following
-        # Sources necessary credentials
-        # Resolves the domain name of the database host with nslookup
-        # Because for some unknown reason when resolving it throught the cqlsh binary the consistency of this working is lower than 50%
-        # If nslookup failed retries and if it succeded to get an ip address executes the command
-
-        script_content = f"""#!/bin/bash
-
-# Source credentials for AWS
-source /var/mina-delegation-verify-auth/.env
-
-max_retries=5
-retries=0
-dns_name=$CASSANDRA_HOST
-ip_address=""
-
-while [ $retries -lt $max_retries ]; do
-    # Perform nslookup and capture the output
-    nslookup_result=$(nslookup $dns_name 2>/dev/null)
-
-    # Check if nslookup was successful (exit code 0)
-    if [ $? -eq 0 ]; then
-        # Extract IP address from nslookup result
-        ip_addresses=($(echo "$nslookup_result" | awk '/^Address: / {{print $2}}'))
-
-        # Check if IP address is not empty
-        if [ ${{#ip_addresses[@]}} -gt 0 ]; then
-            break
-        fi
-    fi
-
-    # Increment retry count
-    ((retries++))
-
-    # If not successful, wait for a moment before retrying
-    sleep 2
-done
-
-# Use the result
-if [ ${{#ip_addresses[@]}} -gt 0 ]; then
-    CASSANDRA_HOST=${{ip_addresses[0]}}
-    /bin/delegation-verify cassandra --keyspace {keyspace} {start_timestamp} {end_timestamp} --no-check
-else
-    echo "DNS resolution failed after $max_retries retries."
-fi
-
-"""
-
         # Entrypoint configmap name
-        entrypoint_configmap_name = (
-            f"delegation-verify-entrypoint-configmap-{configmap_name_suffix}"
-        )
-
-        # Entrypoint configmap
-        entrypoint = client.V1ConfigMap(
-            api_version="v1",
-            kind="ConfigMap",
-            metadata=client.V1ObjectMeta(name=entrypoint_configmap_name),
-            data={"entrypoint.sh": script_content},
-        )
+        entrypoint_configmap_name = f"{platform}-{network_name}-delegation-verify-coordinator-worker"
 
         # Define the volumes
         auth_volume = client.V1Volume(
@@ -174,7 +135,7 @@ fi
         container = client.V1Container(
             name="delegation-verify",
             image=f"{worker_image}:{worker_tag}",
-            command=["/bin/entrypoint/entrypoint.sh"],
+            command=["/bin/entrypoint/entrypoint-worker.sh"],
             resources=resource_requirements_container,
             env=env_vars,
             image_pull_policy=os.environ.get("IMAGE_PULL_POLICY", "IfNotPresent"),
@@ -214,11 +175,6 @@ fi
 
         # Create the job and configmap in Kubernetes
         try:
-            api_core.create_namespaced_config_map(namespace, entrypoint)
-            logging.info(
-                f"ConfigMap {entrypoint_configmap_name} created in namespace {namespace}"
-            )
-            configmaps.append(entrypoint_configmap_name)
             api_batch.create_namespaced_job(namespace, job)
             logging.info(f"Job {job_name} created in namespace {namespace}")
             jobs.append(job_name)
@@ -243,16 +199,6 @@ fi
 
     logging.info("All jobs have been processed.")
     
-    while configmaps:
-        for configmap_name in list(configmaps):
-            try:
-                api_core.delete_namespaced_config_map(configmap_name, namespace)
-                configmaps.remove(configmap_name)
-            except Exception as e:
-                logging.error(f"Error deleting config map for {configmap_name}: {e}")
-
-    logging.info("Configmaps have been deleted.")
-
 def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
     processes = []
     for index, mini_batch in enumerate(time_intervals):
