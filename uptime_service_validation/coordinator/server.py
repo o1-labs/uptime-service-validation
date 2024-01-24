@@ -1,4 +1,5 @@
 import logging
+import socket
 import sys
 from kubernetes import client
 import os
@@ -77,32 +78,37 @@ def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
             f"local-validator-{datetime.now().strftime('%y-%m-%d-%H-%M')}-{index}"
         )
         image = f"{worker_image}:{worker_tag}"
+        cassandra_ip = socket.gethostbyname(os.environ.get("CASSANDRA_HOST"))
         command = [
             "docker",
             "run",
-            # "-it",
-            "--privileged",
-            "--network",
-            "host",
+            # "--privileged",
+            # "--network",
+            # "host",
             "--rm",
             "-v",
             f"{os.environ.get('SSL_CERTFILE')}:/var/ssl/ssl-cert.crt",
-            "--env",
-            "CASSANDRA_HOST",
-            "--env",
+            "-e",
+            f"CASSANDRA_HOST={cassandra_ip}",
+            "-e",
             "CASSANDRA_PORT",
-            "--env",
+            "-e",
             "AWS_ACCESS_KEY_ID",
-            "--env",
+            "-e",
             "AWS_SECRET_ACCESS_KEY",
-            "--env",
+            "-e",
             "AWS_DEFAULT_REGION",
-            "--env",
+            "-e",
+            "AWS_S3_BUCKET",
+            "-e",
+            "NETWORK_NAME",
+            "-e",
             "SSL_CERTFILE=/var/ssl/ssl-cert.crt",
-            "--env",
+            "-e",
             "CASSANDRA_USE_SSL=1",
+            "-e",
+            "CQLSH=/bin/cqlsh-expansion",
             image,
-            "/bin/delegation-verify",
             "cassandra",
             "--keyspace",
             os.environ.get("AWS_KEYSPACE"),
@@ -110,15 +116,6 @@ def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
             f"{datetime_formatter(mini_batch[1])}",
             "--no-check",
         ]
-        # command = [
-        #     "delegation-verify",
-        #     "cassandra",
-        #     "--keyspace",
-        #     os.environ.get("AWS_KEYSPACE"),
-        #     f"{datetime_formatter(mini_batch[0])}",
-        #     f"{datetime_formatter(mini_batch[1])}",
-        #     "--no-check",
-        # ]
         cmd_str = " ".join(command)
 
         # Set up environment variables for the process
