@@ -6,13 +6,41 @@ import os
 from datetime import datetime, timezone
 import subprocess
 import time
-import string
-import random
+import socket
+
+
+def try_get_hostname_ip(hostname, logger, max_retries=5, initial_wait=0.2):
+    """
+    Attempts to resolve a hostname to an IP address with retries.
+
+    :param hostname: The hostname to resolve.
+    :param logger: The logging object.
+    :param max_retries: Maximum number of retries.
+    :param initial_wait: Initial wait time in seconds for the first retry.
+    :return: The resolved IP address or the original hostname if resolution fails.
+    """
+    retry_wait = initial_wait
+    for i in range(max_retries):
+        try:
+            ip_address = socket.gethostbyname(hostname)
+            return ip_address
+        except socket.gaierror as e:
+            logger.warning(
+                f"Attempt {i + 1}: DNS resolution for {hostname} failed: {e}. Retrying in {retry_wait} seconds..."
+            )
+            time.sleep(retry_wait)
+            retry_wait *= 2  # Exponential backoff
+
+    logger.error(
+        f"Max retries ({max_retries}) reached. Returning the original hostname: {hostname}"
+    )
+    return hostname
 
 
 # Format datetime such as it is accepted by the stateless validator
 def datetime_formatter(dt):
     return dt.strftime("%Y-%m-%d %H:%M:%S.%f")[:-5] + "+0000"
+
 
 def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
     # Configuring Kubernetes client
@@ -37,6 +65,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
 
     # List to keep track of job names
     jobs = []
+    cassandra_ip = try_get_hostname_ip(os.environ.get("CASSANDRA_HOST"), logging)
 
     for index, mini_batch in enumerate(time_intervals):
         # Define the environment variables
@@ -61,18 +90,15 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                 name="AWS_S3_BUCKET",
                 value=os.environ.get("AWS_S3_BUCKET"),
             ),
-           client.V1EnvVar(
+            client.V1EnvVar(
                 name="CASSANDRA_HOST",
-                value=os.environ.get("CASSANDRA_HOST"),
+                value=cassandra_ip,
             ),
             client.V1EnvVar(
                 name="CASSANDRA_PORT",
                 value=os.environ.get("CASSANDRA_PORT"),
             ),
-            client.V1EnvVar(
-                name="CASSANDRA_USE_SSL",
-                value="1"
-            ),
+            client.V1EnvVar(name="CASSANDRA_USE_SSL", value="1"),
             client.V1EnvVar(
                 name="SSL_CERTFILE",
                 value=os.environ.get("SSL_CERTFILE"),
@@ -100,7 +126,9 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
         ]
 
         # Entrypoint configmap name
-        entrypoint_configmap_name = f"{platform}-{network_name}-delegation-verify-coordinator-worker"
+        entrypoint_configmap_name = (
+            f"{platform}-{network_name}-delegation-verify-coordinator-worker"
+        )
 
         # Define the volumes
         auth_volume = client.V1Volume(
@@ -129,7 +157,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
         # Define resources for app and init container
         resource_requirements_container = client.V1ResourceRequirements(
             limits={"cpu": worker_cpu_limit, "memory": worker_memory_limit},
-            requests={"cpu": worker_cpu_request, "memory": worker_memory_request}
+            requests={"cpu": worker_cpu_request, "memory": worker_memory_request},
         )
 
         # Define the container
@@ -199,7 +227,8 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
         time.sleep(10)
 
     logging.info("All jobs have been processed.")
-    
+
+
 def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
     processes = []
     for index, mini_batch in enumerate(time_intervals):
@@ -207,7 +236,7 @@ def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
             f"local-validator-{datetime.now().strftime('%y-%m-%d-%H-%M')}-{index}"
         )
         image = f"{worker_image}:{worker_tag}"
-        cassandra_ip = socket.gethostbyname(os.environ.get("CASSANDRA_HOST"))
+        cassandra_ip = try_get_hostname_ip(os.environ.get("CASSANDRA_HOST"), logging)
         command = [
             "docker",
             "run",
