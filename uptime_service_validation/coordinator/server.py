@@ -64,30 +64,6 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
 
     # List to keep track of job names
     jobs = []
-
-def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
-    # Configuring Kubernetes client
-    config.load_incluster_config()
-
-    api_core = client.CoreV1Api()
-    api_batch = client.BatchV1Api()
-
-    namespace = (
-        open("/var/run/secrets/kubernetes.io/serviceaccount/namespace").read().strip()
-    )
-
-    platform = os.environ.get("PLATFORM")
-    network_name = os.environ.get("NETWORK_NAME")
-
-    service_account_name = f"{platform}-{network_name}-delegation-verify"
-
-    worker_cpu_request = os.environ.get("WORKER_CPU_REQUEST")
-    worker_memory_request = os.environ.get("WORKER_MEMORY_REQUEST")
-    worker_cpu_limit = os.environ.get("WORKER_CPU_LIMIT")
-    worker_memory_limit = os.environ.get("WORKER_MEMORY_LIMIT")
-
-    # List to keep track of job names
-    jobs = []
     cassandra_ip = try_get_hostname_ip(os.environ.get("CASSANDRA_HOST"), logging)
 
     for index, mini_batch in enumerate(time_intervals):
