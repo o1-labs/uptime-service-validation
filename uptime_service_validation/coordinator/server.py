@@ -170,7 +170,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
         container = client.V1Container(
             name="delegation-verify",
             image=f"{worker_image}:{worker_tag}",
-            command=["/bin/entrypoint/entrypoint-worker.sh"],
+            command=["/bin/entrypoint/entrypoint-worker.sh"], # The entrypoint script is in the cluster as a configmap. The script can be found in the helm chart of coordinator
             resources=resource_requirements_container,
             env=env_vars,
             image_pull_policy=os.environ.get("IMAGE_PULL_POLICY", "IfNotPresent"),
