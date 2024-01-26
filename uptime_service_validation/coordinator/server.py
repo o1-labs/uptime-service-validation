@@ -9,6 +9,17 @@ import time
 import socket
 
 
+def bool_env_var_set(env_var_name):
+    """
+    Checks if an environment variable is set and is set to a truthy value.
+
+    :param env_var_name: The name of the environment variable.
+    :return: True if the environment variable is set and is set to a truthy value.
+    """
+    env_var = os.environ.get(env_var_name)
+    return env_var is not None and env_var.lower() in ["true", "1"]
+
+
 def try_get_hostname_ip(hostname, logger, max_retries=5, initial_wait=0.2):
     """
     Attempts to resolve a hostname to an IP address with retries.
@@ -40,6 +51,7 @@ def try_get_hostname_ip(hostname, logger, max_retries=5, initial_wait=0.2):
 # Format datetime such as it is accepted by the stateless validator
 def datetime_formatter(dt):
     return dt.strftime("%Y-%m-%d %H:%M:%S.%f")[:-5] + "+0000"
+
 
 def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
     # Configuring Kubernetes client
@@ -97,10 +109,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                 name="CASSANDRA_PORT",
                 value=os.environ.get("CASSANDRA_PORT"),
             ),
-            client.V1EnvVar(
-                name="CASSANDRA_USE_SSL",
-                value="1"
-            ),
+            client.V1EnvVar(name="CASSANDRA_USE_SSL", value="1"),
             client.V1EnvVar(
                 name="SSL_CERTFILE",
                 value="/root/.cassandra/sf-class2-root.crt",
@@ -233,9 +242,12 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
         time.sleep(10)
 
     logging.info("All jobs have been processed.")
-    
+
+
 def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
     processes = []
+    if bool_env_var_set("NO_CHECKS"):
+        logging.info("stateless-verifier will run with --no-checks flag")
     for index, mini_batch in enumerate(time_intervals):
         process_name = (
             f"local-validator-{datetime.now().strftime('%y-%m-%d-%H-%M')}-{index}"
@@ -277,8 +289,9 @@ def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
             os.environ.get("AWS_KEYSPACE"),
             f"{datetime_formatter(mini_batch[0])}",
             f"{datetime_formatter(mini_batch[1])}",
-            "--no-check",
         ]
+        if bool_env_var_set("NO_CHECKS"):
+            command.append("--no-checks")
         cmd_str = " ".join(command)
 
         # Set up environment variables for the process
