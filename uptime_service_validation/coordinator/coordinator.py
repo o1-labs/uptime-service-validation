@@ -9,6 +9,7 @@ from time import sleep, time
 from dataclasses import asdict
 from uptime_service_validation.coordinator.helper import *
 from uptime_service_validation.coordinator.server import (
+    bool_env_var_set,
     setUpValidatorPods,
     setUpValidatorProcesses,
 )
@@ -19,14 +20,6 @@ from uptime_service_validation.coordinator.aws_keyspaces_client import (
 # Add project root to python path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, project_root)
-
-
-def test_env():
-    test = os.environ.get("TEST_ENV")
-    if test == "1":
-        return True
-    else:
-        return False
 
 
 def main():
@@ -86,7 +79,7 @@ def main():
             worker_image = os.environ["WORKER_IMAGE"]
             worker_tag = os.environ["WORKER_TAG"]
             start = time()
-            if test_env():
+            if bool_env_var_set("TEST_ENV"):
                 logging.warning("running in test environment")
                 setUpValidatorProcesses(
                     time_intervals, logging, worker_image, worker_tag
