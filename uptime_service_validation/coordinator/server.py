@@ -77,7 +77,8 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
     # List to keep track of job names
     jobs = []
     cassandra_ip = try_get_hostname_ip(os.environ.get("CASSANDRA_HOST"), logging)
-
+    if bool_env_var_set("NO_CHECKS"):
+        logging.info("stateless-verifier will run with --no-checks flag")
     for index, mini_batch in enumerate(time_intervals):
         # Define the environment variables
         env_vars = [
@@ -141,9 +142,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
         ]
 
         # Entrypoint configmap name
-        entrypoint_configmap_name = (
-            f"delegation-verify-coordinator-worker"
-        )
+        entrypoint_configmap_name = f"delegation-verify-coordinator-worker"
 
         # Define the volumes
         auth_volume = client.V1Volume(
@@ -179,7 +178,9 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
         container = client.V1Container(
             name="delegation-verify",
             image=f"{worker_image}:{worker_tag}",
-            command=["/bin/entrypoint/entrypoint-worker.sh"], # The entrypoint script is in the cluster as a configmap. The script can be found in the helm chart of coordinator
+            command=[
+                "/bin/entrypoint/entrypoint-worker.sh"
+            ],  # The entrypoint script is in the cluster as a configmap. The script can be found in the helm chart of coordinator
             resources=resource_requirements_container,
             env=env_vars,
             image_pull_policy=os.environ.get("IMAGE_PULL_POLICY", "IfNotPresent"),
