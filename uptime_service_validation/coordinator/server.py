@@ -9,6 +9,17 @@ import time
 import socket
 
 
+def bool_env_var_set(env_var_name):
+    """
+    Checks if an environment variable is set and is set to a truthy value.
+
+    :param env_var_name: The name of the environment variable.
+    :return: True if the environment variable is set and is set to a truthy value.
+    """
+    env_var = os.environ.get(env_var_name)
+    return env_var is not None and env_var.lower() in ["true", "1"]
+
+
 def try_get_hostname_ip(hostname, logger, max_retries=5, initial_wait=0.2):
     """
     Attempts to resolve a hostname to an IP address with retries.
@@ -41,6 +52,7 @@ def try_get_hostname_ip(hostname, logger, max_retries=5, initial_wait=0.2):
 def datetime_formatter(dt):
     return dt.strftime("%Y-%m-%d %H:%M:%S.%f")[:-5] + "+0000"
 
+
 def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
     # Configuring Kubernetes client
     config.load_incluster_config()
@@ -65,7 +77,8 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
     # List to keep track of job names
     jobs = []
     cassandra_ip = try_get_hostname_ip(os.environ.get("CASSANDRA_HOST"), logging)
-
+    if bool_env_var_set("NO_CHECKS"):
+        logging.info("stateless-verifier will run with --no-checks flag")
     for index, mini_batch in enumerate(time_intervals):
         # Define the environment variables
         env_vars = [
@@ -97,10 +110,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                 name="CASSANDRA_PORT",
                 value=os.environ.get("CASSANDRA_PORT"),
             ),
-            client.V1EnvVar(
-                name="CASSANDRA_USE_SSL",
-                value="1"
-            ),
+            client.V1EnvVar(name="CASSANDRA_USE_SSL", value="1"),
             client.V1EnvVar(
                 name="SSL_CERTFILE",
                 value="/root/.cassandra/sf-class2-root.crt",
@@ -132,9 +142,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
         ]
 
         # Entrypoint configmap name
-        entrypoint_configmap_name = (
-            f"delegation-verify-coordinator-worker"
-        )
+        entrypoint_configmap_name = f"delegation-verify-coordinator-worker"
 
         # Define the volumes
         auth_volume = client.V1Volume(
@@ -170,7 +178,9 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
         container = client.V1Container(
             name="delegation-verify",
             image=f"{worker_image}:{worker_tag}",
-            command=["/bin/entrypoint/entrypoint-worker.sh"], # The entrypoint script is in the cluster as a configmap. The script can be found in the helm chart of coordinator
+            command=[
+                "/bin/entrypoint/entrypoint-worker.sh"
+            ],  # The entrypoint script is in the cluster as a configmap. The script can be found in the helm chart of coordinator
             resources=resource_requirements_container,
             env=env_vars,
             image_pull_policy=os.environ.get("IMAGE_PULL_POLICY", "IfNotPresent"),
@@ -233,9 +243,12 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
         time.sleep(10)
 
     logging.info("All jobs have been processed.")
-    
+
+
 def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
     processes = []
+    if bool_env_var_set("NO_CHECKS"):
+        logging.info("stateless-verifier will run with --no-checks flag")
     for index, mini_batch in enumerate(time_intervals):
         process_name = (
             f"local-validator-{datetime.now().strftime('%y-%m-%d-%H-%M')}-{index}"
@@ -277,8 +290,9 @@ def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
             os.environ.get("AWS_KEYSPACE"),
             f"{datetime_formatter(mini_batch[0])}",
             f"{datetime_formatter(mini_batch[1])}",
-            "--no-check",
         ]
+        if bool_env_var_set("NO_CHECKS"):
+            command.append("--no-checks")
         cmd_str = " ".join(command)
 
         # Set up environment variables for the process
