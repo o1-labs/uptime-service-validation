@@ -60,6 +60,7 @@ The Coordinator program runs the `stateless-verification-tool` for validation ag
 
 - `WORKER_IMAGE` - Docker image name for the stateless verifier (e.g., `mina-delegation-verify`).
 - `WORKER_TAG` - Specific tag of the Docker image, indicating the version or build.
+- `NO_CHECKS` - if set to `1`, stateless verifier will run with `--no-checks` flag
 
 ### Slack Alerts
 
