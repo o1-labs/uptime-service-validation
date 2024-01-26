@@ -55,7 +55,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
     platform = os.environ.get("PLATFORM")
     network_name = os.environ.get("NETWORK_NAME")
 
-    service_account_name = f"{platform}-{network_name}-delegation-verify"
+    service_account_name = f"delegation-verify"
 
     worker_cpu_request = os.environ.get("WORKER_CPU_REQUEST")
     worker_memory_request = os.environ.get("WORKER_MEMORY_REQUEST")
@@ -125,11 +125,15 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                 name="END_TIMESTAMP",
                 value=datetime_formatter(mini_batch[1]),
             ),
+            client.V1EnvVar(
+                name="NO_CHECKS",
+                value=os.environ.get("NO_CHECKS"),
+            ),
         ]
 
         # Entrypoint configmap name
         entrypoint_configmap_name = (
-            f"{platform}-{network_name}-delegation-verify-coordinator-worker"
+            f"delegation-verify-coordinator-worker"
         )
 
         # Define the volumes
