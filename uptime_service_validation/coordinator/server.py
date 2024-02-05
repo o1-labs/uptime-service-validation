@@ -74,6 +74,8 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
     worker_cpu_limit = os.environ.get("WORKER_CPU_LIMIT")
     worker_memory_limit = os.environ.get("WORKER_MEMORY_LIMIT")
 
+    ttl_seconds = int(os.environ.get("WORKER_TTL_SECONDS_AFTER_FINISHED"))
+
     # List to keep track of job names
     jobs = []
     cassandra_ip = try_get_hostname_ip(os.environ.get("CASSANDRA_HOST"), logging)
@@ -206,6 +208,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
             kind="Job",
             metadata=client.V1ObjectMeta(name=job_name),
             spec=client.V1JobSpec(
+                ttl_seconds_after_finished=ttl_seconds,
                 template=client.V1PodTemplateSpec(
                     spec=client.V1PodSpec(
                         init_containers=[init_container],
