@@ -22,30 +22,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..
 sys.path.insert(0, project_root)
 
 
-def main():
-    process_loop_count = 0
-    load_dotenv()
-
-    logging.basicConfig(
-        stream=sys.stdout,
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
-
-    connection = psycopg2.connect(
-        host=os.environ["POSTGRES_HOST"],
-        port=os.environ["POSTGRES_PORT"],
-        database=os.environ["POSTGRES_DB"],
-        user=os.environ["POSTGRES_USER"],
-        password=os.environ["POSTGRES_PASSWORD"],
-    )
-
-    # Step 1 Get previous record and build relations list
-    interval = int(os.environ["SURVEY_INTERVAL_MINUTES"])
-    prev_batch_end, cur_batch_end, bot_log_id = getBatchTimings(
-        connection, logging, interval
-    )
-
+def process(connection, prev_batch_end, cur_batch_end, bot_log_id):
     while True:
         cur_timestamp = datetime.now(timezone.utc)
         logging.info(
@@ -313,6 +290,31 @@ def main():
                     prev_batch_end,
                     cur_timestamp,
                 )
+
+def main():
+    process_loop_count = 0
+    load_dotenv()
+
+    logging.basicConfig(
+        stream=sys.stdout,
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
+    connection = psycopg2.connect(
+        host=os.environ["POSTGRES_HOST"],
+        port=os.environ["POSTGRES_PORT"],
+        database=os.environ["POSTGRES_DB"],
+        user=os.environ["POSTGRES_USER"],
+        password=os.environ["POSTGRES_PASSWORD"],
+    )
+
+    # Step 1 Get previous record and build relations list
+    interval = int(os.environ["SURVEY_INTERVAL_MINUTES"])
+    prev_batch_end, cur_batch_end, bot_log_id = getBatchTimings(
+        connection, logging, interval
+    )
+    process(connection, prev_batch_end, cur_batch_end, bot_log_id)
 
 
 if __name__ == "__main__":
