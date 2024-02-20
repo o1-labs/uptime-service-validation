@@ -16,8 +16,8 @@ CREATE TABLE statehash (
 );
 CREATE UNIQUE INDEX uq_state_hash ON statehash USING btree (value);
 
-DROP TABLE IF EXISTS botlogs_statehash CASCADE;
-CREATE TABLE botlogs_statehash (
+DROP TABLE IF EXISTS bot_logs_statehash CASCADE;
+CREATE TABLE bot_logs_statehash (
 	id SERIAL PRIMARY KEY,
 	parent_statehash_id INT, 
 	statehash_id INT, 
