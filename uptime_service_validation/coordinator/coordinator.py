@@ -262,8 +262,9 @@ def process(connection, cur_timestamp, prev_batch_end, cur_batch_end, bot_log_id
                     createPointRecord(connection, logging, point_record_df)
             except Exception as error:
                 connection.rollback()
+                bot_log_id = None
                 logging.error(ERROR.format(error))
-            finally:
+            else:
                 connection.commit()
 
         else:
@@ -278,13 +279,14 @@ def process(connection, cur_timestamp, prev_batch_end, cur_batch_end, bot_log_id
         except Exception as error:
             connection.rollback()
             logging.error(ERROR.format(error))
-        finally:
+        else:
             connection.commit()
         return bot_log_id
 
 
 def main():
     process_loop_count = 0
+    retry_count = 0
     load_dotenv()
 
     logging.basicConfig(
@@ -308,7 +310,22 @@ def main():
     )
     while True:
         cur_timestamp = datetime.now(timezone.utc)
-        bot_log_id = process(connection, cur_timestamp, prev_batch_end, cur_batch_end, bot_log_id)
+        next_bot_log_id = process(
+            connection,
+            cur_timestamp,
+            prev_batch_end,
+            cur_batch_end,
+            bot_log_id
+        )
+        if next_bot_log_id is None:
+            retry_count += 1
+            if retry_count > 3:
+                logging.error("Error in processing, retrying the batch...")
+                break
+            logging.error("Error in processing, retry count exceeded... Exitting!")
+            continue
+        retry_count = 0
+        bot_log_id = next_bot_log_id
         prev_batch_end = cur_batch_end
         cur_batch_end = prev_batch_end + timedelta(minutes=interval)
         if prev_batch_end >= cur_timestamp:
