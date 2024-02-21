@@ -23,8 +23,7 @@ project_root = os.path.abspath(os.path.join(
 sys.path.insert(0, project_root)
 
 
-def process(connection, prev_batch_end, cur_batch_end, bot_log_id):
-    cur_timestamp = datetime.now(timezone.utc)
+def process(connection, cur_timestamp, prev_batch_end, cur_batch_end, bot_log_id):
     logging.info(
         "iteration start at: {0}, cur_timestamp: {1}".format(
             prev_batch_end, cur_timestamp
@@ -266,9 +265,6 @@ def process(connection, prev_batch_end, cur_batch_end, bot_log_id):
                 logging.error(ERROR.format(error))
             finally:
                 connection.commit()
-            process_loop_count += 1
-            logging.info("Processed it loop count : {0}".format(
-                process_loop_count))
 
         else:
             logging.info("Finished processing data from table.")
@@ -311,7 +307,8 @@ def main():
         connection, logging, interval
     )
     while True:
-        bot_log_id = process(connection, prev_batch_end, cur_batch_end, bot_log_id)
+        cur_timestamp = datetime.now(timezone.utc)
+        bot_log_id = process(connection, cur_timestamp, prev_batch_end, cur_batch_end, bot_log_id)
         prev_batch_end = cur_batch_end
         cur_batch_end = prev_batch_end + timedelta(minutes=interval)
         if prev_batch_end >= cur_timestamp:
@@ -320,6 +317,9 @@ def main():
                 prev_batch_end,
                 cur_timestamp,
             )
+        process_loop_count += 1
+        logging.info("Processed it loop count : {0}".format(
+            process_loop_count))
 
 
 if __name__ == "__main__":
