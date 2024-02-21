@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import sys
 import os
 import logging
@@ -23,6 +24,12 @@ project_root = os.path.abspath(os.path.join(
 sys.path.insert(0, project_root)
 
 
+@dataclass
+class Result:
+    success: bool
+    next_bot_log_id: int
+
+
 def process(connection, cur_timestamp, prev_batch_end, cur_batch_end, bot_log_id):
     logging.info(
         "iteration start at: {0}, cur_timestamp: {1}".format(
@@ -45,6 +52,7 @@ def process(connection, cur_timestamp, prev_batch_end, cur_batch_end, bot_log_id
             time_until,
         )
         sleep(sleep_interval.total_seconds())
+        return Result(success=True, next_bot_log_id=bot_log_id)
     else:
         master_df = pd.DataFrame()
         # Step 2 Create time ranges:
@@ -262,8 +270,8 @@ def process(connection, cur_timestamp, prev_batch_end, cur_batch_end, bot_log_id
                     createPointRecord(connection, logging, point_record_df)
             except Exception as error:
                 connection.rollback()
-                bot_log_id = None
                 logging.error(ERROR.format(error))
+                return Result(success=False, next_bot_log_id=None)
             else:
                 connection.commit()
 
@@ -281,7 +289,7 @@ def process(connection, cur_timestamp, prev_batch_end, cur_batch_end, bot_log_id
             logging.error(ERROR.format(error))
         else:
             connection.commit()
-        return bot_log_id
+        return Result(success=True, next_bot_log_id=bot_log_id)
 
 
 def main():
@@ -310,22 +318,22 @@ def main():
     )
     while True:
         cur_timestamp = datetime.now(timezone.utc)
-        next_bot_log_id = process(
+        result = process(
             connection,
             cur_timestamp,
             prev_batch_end,
             cur_batch_end,
             bot_log_id
         )
-        if next_bot_log_id is None:
+        if result.success is False:
             retry_count += 1
             if retry_count > 3:
-                logging.error("Error in processing, retrying the batch...")
+                logging.error("Error in processing, retry count exceeded... Exitting!")
                 break
-            logging.error("Error in processing, retry count exceeded... Exitting!")
+            logging.error("Error in processing, retrying the batch...")
             continue
+        bot_log_id = result.next_bot_log_id
         retry_count = 0
-        bot_log_id = next_bot_log_id
         prev_batch_end = cur_batch_end
         cur_batch_end = prev_batch_end + timedelta(minutes=interval)
         if prev_batch_end >= cur_timestamp:
