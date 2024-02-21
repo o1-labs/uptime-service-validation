@@ -294,7 +294,7 @@ def process(connection, cur_timestamp, prev_batch_end, cur_batch_end, bot_log_id
 
 def main():
     process_loop_count = 0
-    retry_count = 0
+    retry_count = os.environ["RETRY_COUNT"]
     load_dotenv()
 
     logging.basicConfig(
@@ -326,10 +326,10 @@ def main():
             bot_log_id
         )
         if result.success is False:
-            retry_count += 1
-            if retry_count > 3:
+            if retry_count < 1:
                 logging.error("Error in processing, retry count exceeded... Exitting!")
-                break
+                sys.exit(1)
+            retry_count -= 1
             logging.error("Error in processing, retrying the batch...")
             continue
         bot_log_id = result.next_bot_log_id
