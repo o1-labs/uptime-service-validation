@@ -82,11 +82,15 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
     if bool_env_var_set("NO_CHECKS"):
         logging.info("stateless-verifier will run with --no-checks flag")
     for index, mini_batch in enumerate(time_intervals):
+
+        # Job name
+        job_name = f"delegation-verify-{datetime.now(timezone.utc).strftime('%y-%m-%d-%H-%M')}-{index}"
+
         # Define the environment variables
         env_vars = [
             client.V1EnvVar(
                 name="AWS_ROLE_SESSION_NAME",
-                value=os.environ.get("AWS_ROLE_SESSION_NAME").rstrip("-coordinator"),
+                value=job_name,
             ),
             client.V1EnvVar(
                 name="AWS_REGION",
@@ -198,9 +202,6 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
             image_pull_policy=os.environ.get("IMAGE_PULL_POLICY", "IfNotPresent"),
             volume_mounts=[auth_volume_mount],
         )
-
-        # Job name
-        job_name = f"delegation-verify-{datetime.now(timezone.utc).strftime('%y-%m-%d-%H-%M')}-{index}"
 
         # Create the job
         job = client.V1Job(
