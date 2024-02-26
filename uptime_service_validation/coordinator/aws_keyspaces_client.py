@@ -29,6 +29,7 @@ class Submission:
     height: Optional[int] = None
     slot: Optional[int] = None
     validation_error: Optional[str] = None
+    verified: Optional[bool] = None
 
 
 @dataclass
@@ -181,7 +182,7 @@ class AWSKeyspacesClient:
                 "You have to provide either both submitted_at_start and submitted_at_end or neither"
             )
 
-        base_query = f"SELECT submitted_at_date, submitted_at, submitter, created_at, block_hash, remote_addr, peer_id, snark_work, graphql_control_port, built_with_commit_sha, state_hash, parent, height, slot, validation_error FROM {self.aws_keyspace}.submissions"
+        base_query = f"SELECT submitted_at_date, submitted_at, submitter, created_at, block_hash, remote_addr, peer_id, snark_work, graphql_control_port, built_with_commit_sha, state_hash, parent, height, slot, validation_error, verified FROM {self.aws_keyspace}.submissions"
 
         # For storing conditions and corresponding parameters
         conditions = []
@@ -248,6 +249,7 @@ class AWSKeyspacesClient:
                 height=row.height,
                 slot=row.slot,
                 validation_error=row.validation_error,
+                verified=row.verified,
             )
             for row in results
         ]

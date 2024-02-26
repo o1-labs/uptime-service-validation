@@ -110,6 +110,7 @@ def main():
                     )
 
             submissions = []
+            submissions_verified = []
             cassandra = AWSKeyspacesClient()
             try:
                 cassandra.connect()
@@ -119,24 +120,30 @@ def main():
                     start_inclusive=True,
                     end_inclusive=False,
                 )
+                # for further processing
+                # we use only submissions verified = True and validation_error = None
+                for submission in submissions:
+                    if submission.verified and submission.validation_error is None:
+                        submissions_verified.append(submission)
             finally:
                 cassandra.close()
 
-            logging.info("number of submissions: {0}".format(len(submissions)))
-            # print("submitter, state_hash, parent, height, slot, validation_error")
-            # for s in submissions:
-            #     print(
-            #         s.submitter,
-            #         s.state_hash,
-            #         s.parent,
-            #         s.height,
-            #         s.slot,
-            #         s.validation_error,
-            #     )
+            all_submissions_count = len(submissions)
+            submissions_to_process_count = len(submissions_verified)
+            logging.info("number of all submissions: {0}".format(all_submissions_count))
+            logging.info(
+                "number of submissions to process: {0}".format(
+                    submissions_to_process_count
+                )
+            )
+            if submissions_to_process_count < all_submissions_count:
+                logging.warning(
+                    "some submissions were not processed, because they were not verified or had validation errors"
+                )
 
             # Step 5 checks for forks and writes to the db.
             state_hash_df = pd.DataFrame(
-                [asdict(submission) for submission in submissions]
+                [asdict(submission) for submission in submissions_verified]
             )
             all_files_count = state_hash_df.shape[0]
             if not state_hash_df.empty:
