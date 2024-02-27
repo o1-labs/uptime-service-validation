@@ -332,10 +332,10 @@ def main():
             retry_count -= 1
             logging.error("Error in processing, retrying the batch...")
             continue
-        bot_log_id = result.next_bot_log_id
-        retry_count = 0
-        prev_batch_end = cur_batch_end
-        cur_batch_end = prev_batch_end + timedelta(minutes=interval)
+        if bot_log_id != result.next_bot_log_id:
+            bot_log_id = result.next_bot_log_id
+            prev_batch_end = cur_batch_end
+            cur_batch_end = prev_batch_end + timedelta(minutes=interval)
         if prev_batch_end >= cur_timestamp:
             logging.warning(
                 "It seems that batch processing took a bit too long than expected as prev_batch_end: %s >= cur_timestamp: %s... progressing to the next batch anyway...",
@@ -345,6 +345,7 @@ def main():
         process_loop_count += 1
         logging.info("Processed it loop count : {0}".format(
             process_loop_count))
+        retry_count = 0
 
 
 if __name__ == "__main__":
