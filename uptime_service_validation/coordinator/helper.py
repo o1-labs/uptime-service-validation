@@ -42,7 +42,7 @@ def getPreviousStatehash(conn, logger, bot_log_id):
     cursor = conn.cursor()
     try:
         sql_query = """select  ps.value parent_statehash, s1.value statehash, b.weight
-            from botlogs_statehash b join statehash s1 ON s1.id = b.statehash_id 
+            from bot_logs_statehash b join statehash s1 ON s1.id = b.statehash_id 
 		    join statehash ps on b.parent_statehash_id = ps.id where bot_log_id =%s"""
         cursor.execute(sql_query, (bot_log_id,))
         result = cursor.fetchall()
@@ -273,7 +273,7 @@ def insertStatehashResults(conn, logger, df, page_size=100):
     logger.info("create_botlogs_statehash  start ")
     temp_df = df[["parent_state_hash", "state_hash", "weight", "bot_log_id"]]
     tuples = [tuple(x) for x in temp_df.to_numpy()]
-    query = """INSERT INTO botlogs_statehash(parent_statehash_id, statehash_id, weight, bot_log_id ) 
+    query = """INSERT INTO bot_logs_statehash(parent_statehash_id, statehash_id, weight, bot_log_id ) 
         VALUES ( (SELECT id FROM statehash WHERE value= %s), (SELECT id FROM statehash WHERE value= %s), %s, %s ) """
     cursor = conn.cursor()
 
