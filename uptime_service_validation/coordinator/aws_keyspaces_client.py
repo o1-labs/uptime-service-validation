@@ -208,6 +208,8 @@ class AWSKeyspacesClient:
                 submitted_at_start, submitted_at_end
             )
 
+            shard_condition = "shard in (" + ",".join(map(str, range(1, 60))) + ")"
+
             if len(submitted_at_date_list) == 1:
                 submitted_at_date = submitted_at_date_list[0]
             else:
@@ -224,6 +226,10 @@ class AWSKeyspacesClient:
                 parameters.append(submitted_at_date)
             elif submitted_at_dates:
                 conditions.append(f"submitted_at_date IN ({submitted_at_dates})")
+
+            # Add shard condition here since we have a submitted_at_date or submitted_at_dates
+            conditions.append(shard_condition)
+
             if submitted_at_start:
                 start_operator = ">=" if start_inclusive else ">"
                 conditions.append(f"submitted_at {start_operator} %s")
