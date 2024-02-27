@@ -19,8 +19,7 @@ from uptime_service_validation.coordinator.aws_keyspaces_client import (
 )
 
 # Add project root to python path
-project_root = os.path.abspath(os.path.join(
-    os.path.dirname(__file__), "..", ".."))
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, project_root)
 
 
@@ -101,7 +100,9 @@ def process(state):
     master_df = pd.DataFrame()
     # Step 2 Create time ranges:
     time_intervals = getTimeBatches(
-        state.prev_batch_end, state.current_batch_end, int(os.environ["MINI_BATCH_NUMBER"])
+        state.prev_batch_end,
+        state.current_batch_end,
+        int(os.environ["MINI_BATCH_NUMBER"]),
     )
     # Step 3 Create Kubernetes ZKValidators and pass mini-batches.
     worker_image = os.environ["WORKER_IMAGE"]
@@ -109,12 +110,9 @@ def process(state):
     start = time()
     if bool_env_var_set("TEST_ENV"):
         logging.warning("running in test environment")
-        setUpValidatorProcesses(
-            time_intervals, logging, worker_image, worker_tag
-        )
+        setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag)
     else:
-        setUpValidatorPods(time_intervals, logging,
-                           worker_image, worker_tag)
+        setUpValidatorPods(time_intervals, logging, worker_image, worker_tag)
     end = time()
     # Step 4 We need to read the ZKValidator results from a db.
     logging.info(
@@ -144,8 +142,8 @@ def process(state):
     try:
         cassandra.connect()
         submissions = cassandra.get_submissions(
-            submitted_at_start=prev_batch_end,
-            submitted_at_end=cur_batch_end,
+            submitted_at_start=state.prev_batch_end,
+            submitted_at_end=state.current_batch_end,
             start_inclusive=True,
             end_inclusive=False,
         )
@@ -161,9 +159,7 @@ def process(state):
     submissions_to_process_count = len(submissions_verified)
     logging.info("number of all submissions: {0}".format(all_submissions_count))
     logging.info(
-        "number of submissions to process: {0}".format(
-            submissions_to_process_count
-        )
+        "number of submissions to process: {0}".format(submissions_to_process_count)
     )
     if submissions_to_process_count < all_submissions_count:
         logging.warning(
@@ -173,6 +169,7 @@ def process(state):
     # Step 5 checks for forks and writes to the db.
     state_hash_df = pd.DataFrame(
         [asdict(submission) for submission in submissions_verified]
+    )
     all_files_count = state_hash_df.shape[0]
     if not state_hash_df.empty:
         master_df["state_hash"] = state_hash_df["state_hash"]
@@ -191,12 +188,10 @@ def process(state):
         )
 
         state_hash = pd.unique(
-            master_df[["state_hash", "parent_state_hash"]
-                      ].values.ravel("k")
+            master_df[["state_hash", "parent_state_hash"]].values.ravel("k")
         )
         state_hash_to_insert = findNewValuesToInsert(
-            existing_state_df, pd.DataFrame(
-                state_hash, columns=["statehash"])
+            existing_state_df, pd.DataFrame(state_hash, columns=["statehash"])
         )
         if not state_hash_to_insert.empty:
             createStatehash(state.conn, logging, state_hash_to_insert)
@@ -204,9 +199,7 @@ def process(state):
         nodes_in_cur_batch = pd.DataFrame(
             master_df["submitter"].unique(), columns=["block_producer_key"]
         )
-        node_to_insert = findNewValuesToInsert(
-            existing_nodes, nodes_in_cur_batch
-        )
+        node_to_insert = findNewValuesToInsert(existing_nodes, nodes_in_cur_batch)
 
         if not node_to_insert.empty:
             node_to_insert["updated_at"] = datetime.now(timezone.utc)
@@ -224,18 +217,14 @@ def process(state):
         )
         p_map = getRelationList(relation_df)
         c_selected_node = filterStateHashPercentage(master_df)
-        batch_graph = createGraph(
-            master_df, p_selected_node_df, c_selected_node, p_map
-        )
+        batch_graph = createGraph(master_df, p_selected_node_df, c_selected_node, p_map)
         weighted_graph = applyWeights(
             batch_graph=batch_graph,
             c_selected_node=c_selected_node,
             p_selected_node=p_selected_node_df,
         )
 
-        queue_list = (
-            list(p_selected_node_df["state_hash"].values) + c_selected_node
-        )
+        queue_list = list(p_selected_node_df["state_hash"].values) + c_selected_node
 
         batch_state_hash = list(master_df["state_hash"].unique())
 
@@ -246,9 +235,7 @@ def process(state):
             # batch_statehash=batch_state_hash, (this used to be here in old code, but it's not used anywhere inside the function)
         )
         point_record_df = master_df[
-            master_df["state_hash"].isin(
-                shortlisted_state_hash_df["state_hash"].values
-            )
+            master_df["state_hash"].isin(shortlisted_state_hash_df["state_hash"].values)
         ]
 
         for index, row in shortlisted_state_hash_df.iterrows():
@@ -273,7 +260,8 @@ def process(state):
                 file_timestamp = state.current_batch_end
                 logging.info(
                     "empty point record for start epoch {0} end epoch {1} ".format(
-                        state.prev_batch_end.timestamp(), state.current_batch_end.timestamp()
+                        state.prev_batch_end.timestamp(),
+                        state.current_batch_end.timestamp(),
                     )
                 )
 
@@ -287,15 +275,11 @@ def process(state):
             bot_log_id = createBotLog(state.conn, logging, values)
 
             shortlisted_state_hash_df["bot_log_id"] = state.bot_log_id
-            insertStatehashResults(
-                state.conn, logging, shortlisted_state_hash_df
-            )
+            insertStatehashResults(state.conn, logging, shortlisted_state_hash_df)
 
             if not point_record_df.empty:
                 point_record_df.loc[:, "amount"] = 1
-                point_record_df.loc[:, "created_at"] = datetime.now(
-                    timezone.utc
-                )
+                point_record_df.loc[:, "created_at"] = datetime.now(timezone.utc)
                 point_record_df.loc[:, "bot_log_id"] = state.bot_log_id
                 point_record_df = point_record_df[
                     [
