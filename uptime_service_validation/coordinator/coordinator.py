@@ -1,3 +1,7 @@
+"""The coordinator script of the uptime service. Its job is to manage
+the validator processes, distribute work them and, when they're done,
+collect their results, compute scores for the delegation program and
+put the results in the database."""
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 import logging
@@ -43,6 +47,11 @@ sys.path.insert(0, project_root)
 
 
 class State:
+    """The state aggregates all the data that remains constant while processing
+    a single batch, but changes between batches. It also takes care of valid
+    state transitions. It should likely be split into smaller chunks, but at
+    this stage it's sufficient."""
+
     def __init__(self, connection, bot_log_id, prev_batch_end, current_batch_end):
         self.bot_log_id = bot_log_id
         self.conn = connection
@@ -54,49 +63,56 @@ class State:
         self.loop_count = 0
         self.stop = False
 
-    def update_timestamp(self):
-        self.current_timestamp = datetime.now(timezone.utc)
-
-    def next_loop(self):
-        self.loop_count += 1
-        logging.info(f"Processed it loop count : {self.loop_count}")
-
     def wait_until_batch_ends(self):
+        "If the time window if the current batch is not yet over, sleep until it is."
         if self.current_batch_end > self.current_timestamp:
             delta = timedelta(minutes=2)
             sleep_interval = (self.current_batch_end - self.current_timestamp) + delta
             time_until = self.current_timestamp + sleep_interval
             logging.info(
-                "all submissions are processed till date. Will wait %s (until %s) before starting next batch...",
+                "All submissions are processed till date. "
+                "Will wait %s (until %s) before starting next batch...",
                 sleep_interval,
                 time_until,
             )
             sleep(sleep_interval.total_seconds())
-            self.update_timestamp()
+            self.__update_timestamp()
 
     def advance_to_next_batch(self, next_bot_log_id):
+        """Update the state so that it describes the next batch in line;
+        transitioning the state to the next loop pass."""
         self.retrials_left = os.environ["RETRY_COUNT"]
         self.bot_log_id = next_bot_log_id
         self.prev_batch_end = self.current_batch_end
         self.current_batch_end = self.prev_batch_end + timedelta(minutes=self.interval)
-        self.warn_if_work_took_longer_then_expected()
-        self.next_loop()
-        self.update_timestamp()
+        self.__warn_if_work_took_longer_then_expected()
+        self.__next_loop()
+        self.__update_timestamp()
 
     def retry_batch(self):
+        "Transition the state for retrial of the current (failed) batch."
         if self.retrials_left > 0:
             self.retrials_left -= 1
             logging.error("Error in processing, retrying the batch...")
         logging.error("Error in processing, retry count exceeded... Exitting!")
         self.stop = True
-        self.warn_if_work_took_longer_then_expected()
-        self.next_loop()
-        self.update_timestamp()
+        self.__warn_if_work_took_longer_then_expected()
+        self.__next_loop()
+        self.__update_timestamp()
 
-    def warn_if_work_took_longer_then_expected(self):
+    def __update_timestamp(self):
+        self.current_timestamp = datetime.now(timezone.utc)
+
+    def __next_loop(self):
+        self.loop_count += 1
+        logging.info("Processed it loop count : %s.", self.loop_count)
+
+    def __warn_if_work_took_longer_then_expected(self):
         if self.prev_batch_end >= self.current_timestamp:
             logging.warning(
-                "It seems that batch processing took a bit too long than expected as prev_batch_end: %s >= cur_timestamp: %s... progressing to the next batch anyway...",
+                "It seems that batch processing took a bit too long than \
+                expected as prev_batch_end: %s >= cur_timestamp: %s... \
+                progressing to the next batch anyway...",
                 self.prev_batch_end,
                 self.current_timestamp,
             )
