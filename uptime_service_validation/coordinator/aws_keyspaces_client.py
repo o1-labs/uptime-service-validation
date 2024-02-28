@@ -1,6 +1,7 @@
 import os
 import boto3
 from cassandra import ProtocolVersion
+from cassandra.auth import PlainTextAuthProvider
 from cassandra.cluster import Cluster, ExecutionProfile, EXEC_PROFILE_DEFAULT
 from cassandra_sigv4.auth import SigV4AuthProvider
 from cassandra.policies import DCAwareRoundRobinPolicy
@@ -44,6 +45,8 @@ class AWSKeyspacesClient:
         self.aws_keyspace = os.environ.get("AWS_KEYSPACE")
         self.cassandra_host = os.environ.get("CASSANDRA_HOST")
         self.cassandra_port = os.environ.get("CASSANDRA_PORT")
+        self.cassandra_user = os.environ.get("CASSANDRA_USERNAME")
+        self.cassandra_pass = os.environ.get("CASSANDRA_PASSWORD")
         # if AWS_ROLE_ARN, AWS_ROLE_SESSION_NAME and AWS_WEB_IDENTITY_TOKEN_FILE are set,
         # we are using AWS STS to assume a role and get temporary credentials
         # if they are not set, we are using AWS IAM user credentials (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
@@ -54,10 +57,21 @@ class AWSKeyspacesClient:
         self.aws_secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
         self.aws_ssl_certificate_path = os.environ.get("SSL_CERTFILE")
         self.aws_region = self.cassandra_host.split(".")[1]
-
         self.ssl_context = self._create_ssl_context()
-        self.auth_provider = self._create_auth_provider()
-        self.cluster = self._create_cluster()
+
+        if self.cassandra_user and self.cassandra_pass:
+            self.auth_provider = PlainTextAuthProvider(
+                username=self.cassandra_user, password=self.cassandra_pass
+            )
+            self.cluster = Cluster(
+                [self.cassandra_host],
+                ssl_context=self.ssl_context,
+                auth_provider=self.auth_provider,
+                port=int(self.cassandra_port),
+            )
+        else:
+            self.auth_provider = self._create_sigv4auth_provider()
+            self.cluster = self._create_cluster()
 
     def _create_ssl_context(self):
         ssl_context = SSLContext(PROTOCOL_TLS_CLIENT)
@@ -69,7 +83,7 @@ class AWSKeyspacesClient:
     def _using_assumed_role(self):
         return self.role_arn is not None and self.role_arn != ""
 
-    def _create_auth_provider(self):
+    def _create_sigv4auth_provider(self):
         if self._using_assumed_role():
             if not self.web_identity_token_file:
                 raise ValueError(
