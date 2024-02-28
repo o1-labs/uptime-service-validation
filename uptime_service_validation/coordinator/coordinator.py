@@ -119,15 +119,18 @@ class State:
 
 
 def process(state):
+    """Perform a signle iteration of the coordinator loop, processing exactly
+    one batch of submissions. Launch verifiers to process submissions, then
+    compute scores and store them in the database."""
     logging.info(
-        "iteration start at: {0}, cur_timestamp: {1}".format(
-            state.prev_batch_end, state.current_timestamp
-        )
+        "iteration start at: %s, cur_timestamp: %s",
+        state.prev_batch_end,
+        state.current_timestamp
     )
     existing_state_df = getStatehashDF(state.conn, logging)
     existing_nodes = getExistingNodes(state.conn, logging)
     logging.info(
-        f"running for batch: {state.prev_batch_end} - {state.current_batch_end}"
+        "running for batch: %s - %s.", state.prev_batch_end, state.current_batch_end
     )
 
     # sleep until batch ends, update the state accordingly, then continue.
@@ -151,23 +154,23 @@ def process(state):
     end = time()
     # Step 4 We need to read the ZKValidator results from a db.
     logging.info(
-        "reading ZKValidator results from a db between the time range: {0} - {1}".format(
-            state.prev_batch_end, state.current_batch_end
-        )
+        "reading ZKValidator results from a db between the time range: %s - %s",
+        state.prev_batch_end,
+        state.current_batch_end
     )
 
-    webhookURL = os.environ.get("WEBHOOK_URL")
-    if webhookURL != None:
+    webhook_url = os.environ.get("WEBHOOK_URL")
+    if webhook_url is not None:
         if end - start < float(os.environ["ALARM_ZK_LOWER_LIMIT_SEC"]):
             sendSlackMessage(
-                webhookURL,
-                f"ZkApp Validation took {end- start} seconds, which is too quick",
+                webhook_url,
+                f"ZkApp Validation took {end - start} seconds, which is too quick",
                 logging,
             )
         if end - start > float(os.environ["ALARM_ZK_UPPER_LIMIT_SEC"]):
             sendSlackMessage(
-                webhookURL,
-                f"ZkApp Validation took {end- start} seconds, which is too long",
+                webhook_url,
+                f"ZkApp Validation took {end - start} seconds, which is too long",
                 logging,
             )
 
@@ -192,13 +195,15 @@ def process(state):
 
     all_submissions_count = len(submissions)
     submissions_to_process_count = len(submissions_verified)
-    logging.info("number of all submissions: {0}".format(all_submissions_count))
+    logging.info("number of all submissions: %s", all_submissions_count)
     logging.info(
-        "number of submissions to process: {0}".format(submissions_to_process_count)
+        "number of submissions to process: %s",
+        submissions_to_process_count
     )
     if submissions_to_process_count < all_submissions_count:
         logging.warning(
-            "some submissions were not processed, because they were not verified or had validation errors"
+            "some submissions were not processed, because they were not \
+            verified or had validation errors"
         )
 
     # Step 5 checks for forks and writes to the db.
@@ -267,7 +272,8 @@ def process(state):
             graph=weighted_graph,
             queue_list=queue_list,
             node=queue_list[0],
-            # batch_statehash=batch_state_hash, (this used to be here in old code, but it's not used anywhere inside the function)
+            # batch_statehash=batch_state_hash, (this used to be here in old code,
+            # but it's not used anywhere inside the function)
         )
         point_record_df = master_df[
             master_df["state_hash"].isin(shortlisted_state_hash_df["state_hash"].values)
@@ -294,10 +300,9 @@ def process(state):
             else:
                 file_timestamp = state.current_batch_end
                 logging.info(
-                    "empty point record for start epoch {0} end epoch {1} ".format(
+                    "empty point record for start epoch %s end epoch %s",
                         state.prev_batch_end.timestamp(),
                         state.current_batch_end.timestamp(),
-                    )
                 )
 
             values = (
@@ -333,7 +338,7 @@ def process(state):
                 createPointRecord(state.conn, logging, point_record_df)
         except Exception as error:
             state.conn.rollback()
-            logging.error(ERROR.format(error))
+            logging.error("ERROR: %s", error)
             state.retry_batch()
         else:
             state.conn.commit()
@@ -351,13 +356,14 @@ def process(state):
         )
     except Exception as error:
         state.conn.rollback()
-        logging.error(ERROR.format(error))
+        logging.error("ERROR: %s", error)
     else:
         state.conn.commit()
     state.advance_to_next_batch(bot_log_id)
 
 
 def main():
+    "The entrypoint to the program."
     load_dotenv()
 
     logging.basicConfig(
