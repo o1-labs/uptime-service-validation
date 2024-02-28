@@ -245,7 +245,8 @@ def process(state):
             node_to_insert["updated_at"] = datetime.now(timezone.utc)
             createNodeRecord(state.conn, logging, node_to_insert, 100)
 
-        master_df = master_df.rename(
+        master_df.rename(
+            inplace=True,
             columns={
                 "file_updated": "file_timestamps",
                 "submitter": "block_producer_key",
