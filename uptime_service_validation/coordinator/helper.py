@@ -1,3 +1,5 @@
+"""This module contains various helper functions and classes for the
+coordinator."""
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import matplotlib.pyplot as plt
@@ -414,4 +416,3 @@ def sendSlackMessage(url, message, logger):
     payload='{"text": "%s" }' % message
     response = requests.post(url, data=payload)
     logger.info(response)
-
