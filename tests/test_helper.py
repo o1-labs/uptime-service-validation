@@ -1,19 +1,24 @@
 from datetime import datetime, timedelta
 from uptime_service_validation.coordinator.aws_keyspaces_client import Submission
-from uptime_service_validation.coordinator.helper import (getTimeBatches)
 import pandas as pd
 from uptime_service_validation.coordinator.helper import (
-    filter_state_hash_percentage, create_graph, apply_weights, bfs)
+    Batch, filter_state_hash_percentage, create_graph, apply_weights, bfs)
 import calendar
 
 
 def test_get_time_batches():
-    a = datetime(2023, 11, 6, 15, 35, 47, 630499)
-    b = a + timedelta(minutes=5)
-    result = getTimeBatches(a, b, 10)
+    start_time = datetime(2023, 11, 6, 15, 35, 47, 630499)
+    interval = timedelta(minutes=5)
+    batch = Batch(
+        start_time = start_time,
+        end_time = start_time + interval,
+        interval = interval,
+        bot_log_id = 1
+    )
+    result = list(batch.split(10))
 
     assert len(result) == 10
-    assert result[0] == (a, datetime(2023, 11, 6, 15, 36, 17, 630499))
+    assert result[0] == (batch.start_time, datetime(2023, 11, 6, 15, 36, 17, 630499))
     assert result[1] == (
         datetime(2023, 11, 6, 15, 36, 17, 630499),
         datetime(2023, 11, 6, 15, 36, 47, 630499),
@@ -46,7 +51,7 @@ def test_get_time_batches():
         datetime(2023, 11, 6, 15, 39, 47, 630499),
         datetime(2023, 11, 6, 15, 40, 17, 630499),
     )
-    assert result[9] == (datetime(2023, 11, 6, 15, 40, 17, 630499), b)
+    assert result[9] == (datetime(2023, 11, 6, 15, 40, 17, 630499), batch.end_time)
 
 
 def test_array_dataframe():
