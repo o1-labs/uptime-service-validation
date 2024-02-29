@@ -137,7 +137,7 @@ def process(conn, state):
     worker_tag = os.environ["WORKER_TAG"]
     start = time()
     if bool_env_var_set("TEST_ENV"):
-        logging.warning("running in test environment")
+        logging.info("running in test environment")
         setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag)
     else:
         setUpValidatorPods(time_intervals, logging, worker_image, worker_tag)
