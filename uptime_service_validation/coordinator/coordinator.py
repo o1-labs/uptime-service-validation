@@ -13,22 +13,13 @@ from dotenv import load_dotenv
 import pandas as pd
 import psycopg2
 from uptime_service_validation.coordinator.helper import (
-    getBatchTimings,
-    getPreviousStatehash,
-    getRelationList,
-    getStatehashDF,
+    DB,
+    getRelations,
     findNewValuesToInsert,
-    createStatehash,
-    createNodeRecord,
     filterStateHashPercentage,
     createGraph,
     applyWeights,
     bfs,
-    createBotLog,
-    insertStatehashResults,
-    createPointRecord,
-    updateScoreboard,
-    getExistingNodes,
     sendSlackMessage
 )
 from uptime_service_validation.coordinator.server import (
@@ -112,7 +103,7 @@ class State:
             )
 
 
-def process(conn, state):
+def process(db, state):
     """Perform a signle iteration of the coordinator loop, processing exactly
     one batch of submissions. Launch verifiers to process submissions, then
     compute scores and store them in the database."""
@@ -121,8 +112,8 @@ def process(conn, state):
         state.batch.start_time,
         state.current_timestamp
     )
-    existing_state_df = getStatehashDF(conn, logging)
-    existing_nodes = getExistingNodes(conn, logging)
+    existing_state_df = db.get_statehash_df()
+    existing_nodes = db.get_existing_nodes()
     logging.info(
         "running for batch: %s - %s.", state.batch.start_time, state.batch.end_time
     )
@@ -224,7 +215,7 @@ def process(conn, state):
             existing_state_df, pd.DataFrame(state_hash, columns=["statehash"])
         )
         if not state_hash_to_insert.empty:
-            createStatehash(conn, logging, state_hash_to_insert)
+            db.create_statehash(state_hash_to_insert)
 
         nodes_in_cur_batch = pd.DataFrame(
             master_df["submitter"].unique(), columns=["block_producer_key"]
@@ -233,7 +224,7 @@ def process(conn, state):
 
         if not node_to_insert.empty:
             node_to_insert["updated_at"] = datetime.now(timezone.utc)
-            createNodeRecord(conn, logging, node_to_insert, 100)
+            db.create_node_record(node_to_insert, 100)
 
         master_df.rename(
             inplace=True,
@@ -243,10 +234,8 @@ def process(conn, state):
             }
         )
 
-        relation_df, p_selected_node_df = getPreviousStatehash(
-            conn, logging, state.batch.bot_log_id
-        )
-        p_map = getRelationList(relation_df)
+        relation_df, p_selected_node_df = db.get_previous_statehash(state.batch.bot_log_id)
+        p_map = list(getRelations(relation_df))
         c_selected_node = filterStateHashPercentage(master_df)
         batch_graph = createGraph(master_df, p_selected_node_df, c_selected_node, p_map)
         weighted_graph = applyWeights(
@@ -282,9 +271,7 @@ def process(conn, state):
             parent_hash.append(p_hash)
         shortlisted_state_hash_df["parent_state_hash"] = parent_hash
 
-        p_map = getRelationList(
-            shortlisted_state_hash_df[["parent_state_hash", "state_hash"]]
-        )
+        p_map = list(getRelations(shortlisted_state_hash_df[["parent_state_hash", "state_hash"]]))
         try:
             if not point_record_df.empty:
                 file_timestamp = master_df.iloc[-1]["file_timestamps"]
@@ -303,10 +290,10 @@ def process(conn, state):
                 state.batch.end_time.timestamp(),
                 end - start,
             )
-            bot_log_id = createBotLog(conn, logging, values)
+            bot_log_id = db.create_bot_log(values)
 
             shortlisted_state_hash_df["bot_log_id"] = bot_log_id
-            insertStatehashResults(conn, logging, shortlisted_state_hash_df)
+            db.insert_statehash_results(shortlisted_state_hash_df)
 
             if not point_record_df.empty:
                 point_record_df.loc[:, "amount"] = 1
@@ -326,30 +313,28 @@ def process(conn, state):
                     ]
                 ]
 
-                createPointRecord(conn, logging, point_record_df)
+                db.create_point_record(point_record_df)
         except Exception as error:
-            conn.rollback()
+            db.connection.rollback()
             logging.error("ERROR: %s", error)
             state.retry_batch()
         else:
-            conn.commit()
+            db.connection.commit()
 
     else:
         # new bot log id hasn't been created, so proceed with the old one
         bot_log_id = state.batch.bot_log_id
         logging.info("Finished processing data from table.")
     try:
-        updateScoreboard(
-            conn,
-            logging,
+        db.update_scoreboard(
             state.batch.end_time,
             int(os.environ["UPTIME_DAYS_FOR_SCORE"]),
         )
     except Exception as error:
-        conn.rollback()
+        db.connection.rollback()
         logging.error("ERROR: %s", error)
     else:
-        conn.commit()
+        db.connection.commit()
     state.advance_to_next_batch(bot_log_id)
 
 
@@ -373,12 +358,11 @@ def main():
 
     # Step 1 Get previous record and build relations list
     interval = int(os.environ["SURVEY_INTERVAL_MINUTES"])
-    batch = getBatchTimings(
-        connection, logging, timedelta(minutes=interval)
-    )
+    db = DB(connection, logging)
+    batch = db.get_batch_timings(timedelta(minutes=interval))
     state = State(batch)
     while not state.stop:
-        process(connection, state)
+        process(db, state)
 
 
 if __name__ == "__main__":

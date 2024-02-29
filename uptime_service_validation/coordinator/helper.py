@@ -34,73 +34,246 @@ class Batch:
         return ((self.start_time + diff * i, self.start_time + diff * (i + 1)) \
                 for i in range(parts_number))
 
+class DB:
+    """A wrapper around the database connection, providing high-level methods
+    for querying and updating the database."""
 
-def getBatchTimings(conn, logger, interval):
-    try:
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT id, batch_end_epoch FROM bot_logs ORDER BY batch_end_epoch DESC limit 1 "
+    def __init__(self, connection, logger):
+        self.connection = connection
+        self.logger = logger
+
+    def get_batch_timings(self, interval):
+        "Get the time-frame for the next batch and previous batch's id."
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute(
+                "SELECT id, batch_end_epoch FROM bot_logs ORDER BY batch_end_epoch DESC limit 1 "
+            )
+            result = cursor.fetchone()
+            bot_log_id = result[0]
+            prev_epoch = result[1]
+
+            prev_batch_end = datetime.fromtimestamp(prev_epoch, timezone.utc)
+            cur_batch_end = prev_batch_end + interval
+        except (Exception, psycopg2.DatabaseError) as error:
+            self.logger.error(ERROR.format(error))
+            raise RuntimeError("Could not load the latest batch.") from error
+        finally:
+            cursor.close()
+        return Batch(
+            start_time = prev_batch_end,
+            end_time = cur_batch_end,
+            bot_log_id = bot_log_id,
+            interval = interval
         )
-        result = cursor.fetchone()
-        bot_log_id = result[0]
-        prev_epoch = result[1]
 
-        prev_batch_end = datetime.fromtimestamp(prev_epoch, timezone.utc)
-        cur_batch_end = prev_batch_end + interval
-    except (Exception, psycopg2.DatabaseError) as error:
-        logger.error(ERROR.format(error))
-        raise RuntimeError("Could not load the latest batch.")
-    finally:
-        cursor.close()
-    return Batch(
-        start_time = prev_batch_end,
-        end_time = cur_batch_end,
-        bot_log_id = bot_log_id,
-        interval = interval
-    )
+    def get_previous_statehash(self, bot_log_id):
+        "Get the statehash of the latest batch."
+        cursor = self.connection.cursor()
+        try:
+            sql_query = """select  ps.value parent_statehash, s1.value statehash, b.weight
+                        from bot_logs_statehash b join statehash s1 ON s1.id = b.statehash_id
+                        join statehash ps on b.parent_statehash_id = ps.id where bot_log_id =%s"""
+            cursor.execute(sql_query, (bot_log_id,))
+            result = cursor.fetchall()
+
+            df = pd.DataFrame(result, columns=["parent_state_hash", "state_hash", "weight"])
+            previous_result_df = df[["parent_state_hash", "state_hash"]]
+            p_selected_node_df = df[["state_hash", "weight"]]
+        except (Exception, psycopg2.DatabaseError) as error:
+            self.logger.error(ERROR.format(error))
+            cursor.close()
+            return -1
+        finally:
+            cursor.close()
+        return previous_result_df, p_selected_node_df
+
+    def get_statehash_df(self):
+        "Get the list of all known statehashes as a data frame."
+        cursor = self.connection.cursor()
+        try:
+            cursor.execute("select value from statehash")
+            result = cursor.fetchall()
+            state_hash = pd.DataFrame(result, columns=["statehash"])
+        except (Exception, psycopg2.DatabaseError) as error:
+            self.logger.error(ERROR.format(error))
+            return -1
+        finally:
+            cursor.close()
+        return state_hash
+
+    def create_statehash(self, statehash_df, page_size=100):
+        "Add a new statehashto the database."
+        tuples = [tuple(x) for x in statehash_df.to_numpy()]
+        self.logger.info("create_statehash: %s", tuples)
+        query = """INSERT INTO statehash ( value)
+                VALUES ( %s)  """
+        cursor = self.connection.cursor()
+        try:
+            extras.execute_batch(cursor, query, tuples, page_size)
+        except (Exception, psycopg2.DatabaseError) as error:
+            self.logger.error(ERROR.format(error))
+            cursor.close()
+            return -1
+        finally:
+            cursor.close()
+        self.logger.info("create_statehash  end ")
+        return 0
+
+    def create_node_record(self, df, page_size=100):
+        "Add new block producers to the database."
+        self.logger.info("create_point_record  start ")
+        tuples = [tuple(x) for x in df.to_numpy()]
+        query = """INSERT INTO nodes ( block_producer_key, updated_at)
+                VALUES ( %s,  %s )  """
+        cursor = self.connection.cursor()
+        try:
+            extras.execute_batch(cursor, query, tuples, page_size)
+        except (Exception, psycopg2.DatabaseError) as error:
+            logger.error(ERROR.format(error))
+            cursor.close()
+            return 1
+        finally:
+            cursor.close()
+        self.logger.info("create_point_record  end ")
+        return 0
+
+    def create_bot_log(self, values):
+        "Add a new batch to the database."
+        self.logger.info("create_bot_log  start ")
+        query = """INSERT INTO bot_logs(files_processed, file_timestamps, batch_start_epoch, batch_end_epoch,
+                processing_time)  values ( %s, %s, %s, %s, %s) RETURNING id """
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute(query, values)
+            result = cursor.fetchone()
+        except (Exception, psycopg2.DatabaseError) as error:
+            self.logger.error(ERROR.format(error))
+            cursor.close()
+            return -1
+        finally:
+            cursor.close()
+        self.logger.info("create_bot_log  end ")
+        return result[0]
 
 
-def getPreviousStatehash(conn, logger, bot_log_id):
-    cursor = conn.cursor()
-    try:
-        sql_query = """select  ps.value parent_statehash, s1.value statehash, b.weight
-            from bot_logs_statehash b join statehash s1 ON s1.id = b.statehash_id 
-		    join statehash ps on b.parent_statehash_id = ps.id where bot_log_id =%s"""
-        cursor.execute(sql_query, (bot_log_id,))
-        result = cursor.fetchall()
+    def insert_statehash_results(self, df, page_size=100):
+        "Relate statehashes to the batches they were observed in."
+        self.logger.info("create_botlogs_statehash  start ")
+        temp_df = df[["parent_state_hash", "state_hash", "weight", "bot_log_id"]]
+        tuples = [tuple(x) for x in temp_df.to_numpy()]
+        query = """INSERT INTO bot_logs_statehash(parent_statehash_id, statehash_id, weight, bot_log_id )
+                VALUES (
+                  (SELECT id FROM statehash WHERE value= %s),
+                  (SELECT id FROM statehash WHERE value= %s),
+                  %s,
+                  %s ) """
+        cursor = self.connection.cursor()
 
-        df = pd.DataFrame(result, columns=["parent_state_hash", "state_hash", "weight"])
-        previous_result_df = df[["parent_state_hash", "state_hash"]]
-        p_selected_node_df = df[["state_hash", "weight"]]
-    except (Exception, psycopg2.DatabaseError) as error:
-        logger.error(ERROR.format(error))
-        cursor.close()
-        return -1
-    finally:
-        cursor.close()
-    return previous_result_df, p_selected_node_df
-
-
-def getRelationList(df):
-    relation_list = []
-    for child, parent in df[["state_hash", "parent_state_hash"]].values:
-        if parent in df["state_hash"].values:
-            relation_list.append((parent, child))
-    return relation_list
+        try:
+            extras.execute_batch(cursor, query, tuples, page_size)
+        except (Exception, psycopg2.DatabaseError) as error:
+            self.logger.error(ERROR.format(error))
+            cursor.close()
+            return 1
+        finally:
+            cursor.close()
+        self.logger.info("create_botlogs_statehash  end ")
+        return 0
 
 
-def getStatehashDF(conn, logger):
-    cursor = conn.cursor()
-    try:
-        cursor.execute("select value from statehash")
-        result = cursor.fetchall()
-        state_hash = pd.DataFrame(result, columns=["statehash"])
-    except (Exception, psycopg2.DatabaseError) as error:
-        logger.error(ERROR.format(error))
-        return -1
-    finally:
-        cursor.close()
-    return state_hash
+    def create_point_record(self, df, page_size=100):
+        "Add a new scoring submission to the database."
+        self.logger.info("create_point_record  start ")
+        tuples = [tuple(x) for x in df.to_numpy()]
+        query = """INSERT INTO points
+                   (file_name, file_timestamps, blockchain_epoch, node_id,
+                   blockchain_height, amount, created_at, bot_log_id, statehash_id)
+                VALUES ( %s, %s,  %s, (SELECT id FROM nodes WHERE block_producer_key= %s),
+                         %s, %s, %s, %s, (SELECT id FROM statehash WHERE value= %s) )"""
+        try:
+            cursor = self.connection.cursor()
+            extras.execute_batch(cursor, query, tuples, page_size)
+        except (Exception, psycopg2.DatabaseError) as error:
+            self.logger.error(ERROR.format(error))
+            cursor.close()
+            return 1
+        finally:
+            cursor.close()
+        self.logger.info("create_point_record  end ")
+        return 0
+
+    def update_scoreboard(self, score_till_time, uptime_days=30):
+        "Update the block producer scores."
+        self.logger.info("updateScoreboard  start ")
+        sql = """with vars  (snapshot_date, start_date) as( values (%s AT TIME ZONE 'UTC',
+                        (%s - interval '%s' day) AT TIME ZONE 'UTC')
+              )
+              , epochs as(
+                select extract('epoch' from snapshot_date) as end_epoch,
+                extract('epoch' from start_date) as start_epoch from vars
+              )
+              , b_logs as(
+                select (count(1) ) as surveys
+                from bot_logs b , epochs e
+                where b.batch_start_epoch >= start_epoch and  b.batch_end_epoch <= end_epoch
+              )
+              , scores as (
+                select p.node_id, count(p.bot_log_id) bp_points
+                from points p join bot_logs b on p.bot_log_id =b.id, epochs
+                where b.batch_start_epoch >= start_epoch and  b.batch_end_epoch <= end_epoch
+                group by 1
+              )
+              , final_scores as (
+                select node_id, bp_points,
+                surveys, trunc( ((bp_points::decimal*100) / surveys),2) as score_perc
+                from scores l join nodes n on l.node_id=n.id, b_logs t
+              )
+              update nodes nrt set score = s.bp_points, score_percent=s.score_perc
+              from final_scores s where nrt.id=s.node_id """
+
+        history_sql = """insert into score_history (node_id, score_at, score, score_percent)
+                      SELECT id as node_id, %s, score, score_percent from nodes where score is not null """
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute(
+                sql,
+                (
+                    score_till_time,
+                    score_till_time,
+                    uptime_days,
+                ),
+            )
+            cursor.execute(history_sql, (score_till_time,))
+        except (Exception, psycopg2.DatabaseError) as error:
+            self.logger.error(ERROR.format(error))
+            cursor.close()
+            return -1
+        finally:
+            cursor.close()
+        self.logger.info("updateScoreboard  end ")
+        return 0
+
+    def get_existing_nodes(self):
+        "Get the list of all known block producers."
+        cursor = self.connection.cursor()
+        try:
+            cursor.execute("select block_producer_key from nodes")
+            result = cursor.fetchall()
+            nodes = pd.DataFrame(result, columns=["block_producer_key"])
+        except (Exception, psycopg2.DatabaseError) as error:
+            self.logger.error(ERROR.format(error))
+            return -1
+        finally:
+            cursor.close()
+        return nodes
+
+
+def getRelations(df):
+    return ((parent, child) for child, parent \
+            in df[["state_hash", "parent_state_hash"]].values \
+            if parent in df["state_hash"].values)
+
 
 
 def findNewValuesToInsert(existing_values, new_values):
@@ -110,43 +283,6 @@ def findNewValuesToInsert(existing_values, new_values):
         .drop("_merge", axis=1)
         .drop_duplicates()
     )
-
-
-def createStatehash(conn, logger, statehash_df, page_size=100):
-    tuples = [tuple(x) for x in statehash_df.to_numpy()]
-    logger.info("create_statehash: {0}".format(tuples))
-    query = """INSERT INTO statehash ( value) 
-            VALUES ( %s)  """
-    cursor = conn.cursor()
-    try:
-        cursor = conn.cursor()
-        extras.execute_batch(cursor, query, tuples, page_size)
-    except (Exception, psycopg2.DatabaseError) as error:
-        logger.error(ERROR.format(error))
-        cursor.close()
-        return -1
-    finally:
-        cursor.close()
-    logger.info("create_statehash  end ")
-    return 0
-
-
-def createNodeRecord(conn, logger, df, page_size=100):
-    logger.info("create_point_record  start ")
-    tuples = [tuple(x) for x in df.to_numpy()]
-    query = """INSERT INTO nodes ( block_producer_key, updated_at) 
-            VALUES ( %s,  %s )  """
-    cursor = conn.cursor()
-    try:
-        extras.execute_batch(cursor, query, tuples, page_size)
-    except (Exception, psycopg2.DatabaseError) as error:
-        logger.error(ERROR.format(error))
-        cursor.close()
-        return 1
-    finally:
-        cursor.close()
-    logger.info("create_point_record  end ")
-    return 0
 
 
 def filterStateHashPercentage(df, p=0.34):
@@ -273,132 +409,9 @@ def bfs(graph, queue_list, node, max_depth=2):
     return shortlisted_state_hash_df
 
 
-def createBotLog(conn, logger, values):
-    logger.info("create_bot_log  start ")
-    query = """INSERT INTO bot_logs(files_processed, file_timestamps, batch_start_epoch, batch_end_epoch, 
-                processing_time)  values ( %s, %s, %s, %s, %s) RETURNING id """
-    try:
-        cursor = conn.cursor()
-        cursor.execute(query, values)
-        result = cursor.fetchone()
-    except (Exception, psycopg2.DatabaseError) as error:
-        logger.error(ERROR.format(error))
-        cursor.close()
-        return -1
-    finally:
-        cursor.close()
-    logger.info("create_bot_log  end ")
-    return result[0]
-
-
-def insertStatehashResults(conn, logger, df, page_size=100):
-    logger.info("create_botlogs_statehash  start ")
-    temp_df = df[["parent_state_hash", "state_hash", "weight", "bot_log_id"]]
-    tuples = [tuple(x) for x in temp_df.to_numpy()]
-    query = """INSERT INTO bot_logs_statehash(parent_statehash_id, statehash_id, weight, bot_log_id ) 
-        VALUES ( (SELECT id FROM statehash WHERE value= %s), (SELECT id FROM statehash WHERE value= %s), %s, %s ) """
-    cursor = conn.cursor()
-
-    try:
-        extras.execute_batch(cursor, query, tuples, page_size)
-    except (Exception, psycopg2.DatabaseError) as error:
-        logger.error(ERROR.format(error))
-        cursor.close()
-        return 1
-    finally:
-        cursor.close()
-    logger.info("create_botlogs_statehash  end ")
-    return 0
-
-
-def createPointRecord(conn, logger, df, page_size=100):
-    logger.info("create_point_record  start ")
-    tuples = [tuple(x) for x in df.to_numpy()]
-    query = """INSERT INTO points (file_name, file_timestamps, blockchain_epoch, node_id, blockchain_height,
-                amount, created_at, bot_log_id, statehash_id) 
-            VALUES ( %s, %s,  %s, (SELECT id FROM nodes WHERE block_producer_key= %s), %s, %s, 
-                    %s, %s, (SELECT id FROM statehash WHERE value= %s) )"""
-    try:
-        cursor = conn.cursor()
-        extras.execute_batch(cursor, query, tuples, page_size)
-    except (Exception, psycopg2.DatabaseError) as error:
-        logger.error(ERROR.format(error))
-        cursor.close()
-        return 1
-    finally:
-        cursor.close()
-    logger.info("create_point_record  end ")
-    return 0
-
-
-def updateScoreboard(conn, logger, score_till_time, uptime_days=30):
-    logger.info("updateScoreboard  start ")
-    sql = """with vars  (snapshot_date, start_date) as( values (%s AT TIME ZONE 'UTC', 
-			(%s - interval '%s' day) AT TIME ZONE 'UTC')
-	)
-	, epochs as(
-		select extract('epoch' from snapshot_date) as end_epoch,
-		extract('epoch' from start_date) as start_epoch from vars
-	)
-	, b_logs as(
-		select (count(1) ) as surveys
-		from bot_logs b , epochs e
-		where b.batch_start_epoch >= start_epoch and  b.batch_end_epoch <= end_epoch
-	)
-	, scores as (
-		select p.node_id, count(p.bot_log_id) bp_points
-		from points p join bot_logs b on p.bot_log_id =b.id, epochs
-		where b.batch_start_epoch >= start_epoch and  b.batch_end_epoch <= end_epoch
-		group by 1
-	)
-	, final_scores as (
-	select node_id, bp_points, 
-		surveys, trunc( ((bp_points::decimal*100) / surveys),2) as score_perc
-	from scores l join nodes n on l.node_id=n.id, b_logs t
-	)
-	update nodes nrt set score = s.bp_points, score_percent=s.score_perc  
-	from final_scores s where nrt.id=s.node_id """
-
-    history_sql = """insert into score_history (node_id, score_at, score, score_percent)
-        SELECT id as node_id, %s, score, score_percent from nodes where score is not null """
-    try:
-        cursor = conn.cursor()
-        cursor.execute(
-            sql,
-            (
-                score_till_time,
-                score_till_time,
-                uptime_days,
-            ),
-        )
-        cursor.execute(history_sql, (score_till_time,))
-    except (Exception, psycopg2.DatabaseError) as error:
-        logger.error(ERROR.format(error))
-        cursor.close()
-        return -1
-    finally:
-        cursor.close()
-    logger.info("updateScoreboard  end ")
-    return 0
-
-
-def getExistingNodes(conn, logger):
-    cursor = conn.cursor()
-    try:
-        cursor.execute("select block_producer_key from nodes")
-        result = cursor.fetchall()
-        nodes = pd.DataFrame(result, columns=["block_producer_key"])
-    except (Exception, psycopg2.DatabaseError) as error:
-        logger.error(ERROR.format(error))
-        cursor.close()
-        return -1
-    finally:
-        cursor.close()
-    return nodes
-
 
 def sendSlackMessage(url, message, logger):
     payload='{"text": "%s" }' % message
     response = requests.post(url, data=payload)
     logger.info(response)
-    
+
