@@ -13,7 +13,6 @@ from dotenv import load_dotenv
 import pandas as pd
 import psycopg2
 from uptime_service_validation.coordinator.helper import (
-    getTimeBatches,
     getBatchTimings,
     getPreviousStatehash,
     getRelationList,
@@ -52,11 +51,8 @@ class State:
     state transitions. It should likely be split into smaller chunks, but at
     this stage it's sufficient."""
 
-    def __init__(self, connection, bot_log_id, prev_batch_end, current_batch_end):
-        self.bot_log_id = bot_log_id
-        self.conn = connection
-        self.prev_batch_end = prev_batch_end
-        self.current_batch_end = current_batch_end
+    def __init__(self, batch):
+        self.batch = batch
         self.current_timestamp = datetime.now(timezone.utc)
         self.retrials_left = os.environ["RETRY_COUNT"]
         self.interval = int(os.environ["SURVEY_INTERVAL_MINUTES"])
@@ -65,9 +61,9 @@ class State:
 
     def wait_until_batch_ends(self):
         "If the time window if the current batch is not yet over, sleep until it is."
-        if self.current_batch_end > self.current_timestamp:
+        if self.batch.end_time > self.current_timestamp:
             delta = timedelta(minutes=2)
-            sleep_interval = (self.current_batch_end - self.current_timestamp) + delta
+            sleep_interval = (self.batch.end_time - self.current_timestamp) + delta
             time_until = self.current_timestamp + sleep_interval
             logging.info(
                 "All submissions are processed till date. "
@@ -82,9 +78,7 @@ class State:
         """Update the state so that it describes the next batch in line;
         transitioning the state to the next loop pass."""
         self.retrials_left = os.environ["RETRY_COUNT"]
-        self.bot_log_id = next_bot_log_id
-        self.prev_batch_end = self.current_batch_end
-        self.current_batch_end = self.prev_batch_end + timedelta(minutes=self.interval)
+        self.batch = self.batch.next(next_bot_log_id)
         self.__warn_if_work_took_longer_then_expected()
         self.__next_loop()
         self.__update_timestamp()
@@ -108,40 +102,36 @@ class State:
         logging.info("Processed it loop count : %s.", self.loop_count)
 
     def __warn_if_work_took_longer_then_expected(self):
-        if self.prev_batch_end >= self.current_timestamp:
+        if self.batch.start_time >= self.current_timestamp:
             logging.warning(
                 "It seems that batch processing took a bit too long than \
                 expected as prev_batch_end: %s >= cur_timestamp: %s... \
                 progressing to the next batch anyway...",
-                self.prev_batch_end,
+                self.batch.start_time,
                 self.current_timestamp,
             )
 
 
-def process(state):
+def process(conn, state):
     """Perform a signle iteration of the coordinator loop, processing exactly
     one batch of submissions. Launch verifiers to process submissions, then
     compute scores and store them in the database."""
     logging.info(
         "iteration start at: %s, cur_timestamp: %s",
-        state.prev_batch_end,
+        state.batch.start_time,
         state.current_timestamp
     )
-    existing_state_df = getStatehashDF(state.conn, logging)
-    existing_nodes = getExistingNodes(state.conn, logging)
+    existing_state_df = getStatehashDF(conn, logging)
+    existing_nodes = getExistingNodes(conn, logging)
     logging.info(
-        "running for batch: %s - %s.", state.prev_batch_end, state.current_batch_end
+        "running for batch: %s - %s.", state.batch.start_time, state.batch.end_time
     )
 
     # sleep until batch ends, update the state accordingly, then continue.
     state.wait_until_batch_ends()
     master_df = pd.DataFrame()
     # Step 2 Create time ranges:
-    time_intervals = getTimeBatches(
-        state.prev_batch_end,
-        state.current_batch_end,
-        int(os.environ["MINI_BATCH_NUMBER"]),
-    )
+    time_intervals = list(state.batch.split(int(os.environ["MINI_BATCH_NUMBER"])))
     # Step 3 Create Kubernetes ZKValidators and pass mini-batches.
     worker_image = os.environ["WORKER_IMAGE"]
     worker_tag = os.environ["WORKER_TAG"]
@@ -155,8 +145,8 @@ def process(state):
     # Step 4 We need to read the ZKValidator results from a db.
     logging.info(
         "reading ZKValidator results from a db between the time range: %s - %s",
-        state.prev_batch_end,
-        state.current_batch_end
+        state.batch.start_time,
+        state.batch.end_time
     )
 
     webhook_url = os.environ.get("WEBHOOK_URL")
@@ -180,8 +170,8 @@ def process(state):
     try:
         cassandra.connect()
         submissions = cassandra.get_submissions(
-            submitted_at_start=state.prev_batch_end,
-            submitted_at_end=state.current_batch_end,
+            submitted_at_start=state.batch.start_time,
+            submitted_at_end=state.batch.end_time,
             start_inclusive=True,
             end_inclusive=False,
         )
@@ -234,7 +224,7 @@ def process(state):
             existing_state_df, pd.DataFrame(state_hash, columns=["statehash"])
         )
         if not state_hash_to_insert.empty:
-            createStatehash(state.conn, logging, state_hash_to_insert)
+            createStatehash(conn, logging, state_hash_to_insert)
 
         nodes_in_cur_batch = pd.DataFrame(
             master_df["submitter"].unique(), columns=["block_producer_key"]
@@ -243,7 +233,7 @@ def process(state):
 
         if not node_to_insert.empty:
             node_to_insert["updated_at"] = datetime.now(timezone.utc)
-            createNodeRecord(state.conn, logging, node_to_insert, 100)
+            createNodeRecord(conn, logging, node_to_insert, 100)
 
         master_df.rename(
             inplace=True,
@@ -254,7 +244,7 @@ def process(state):
         )
 
         relation_df, p_selected_node_df = getPreviousStatehash(
-            state.conn, logging, state.bot_log_id
+            conn, logging, state.batch.bot_log_id
         )
         p_map = getRelationList(relation_df)
         c_selected_node = filterStateHashPercentage(master_df)
@@ -299,29 +289,29 @@ def process(state):
             if not point_record_df.empty:
                 file_timestamp = master_df.iloc[-1]["file_timestamps"]
             else:
-                file_timestamp = state.current_batch_end
+                file_timestamp = state.batch.end_time
                 logging.info(
                     "empty point record for start epoch %s end epoch %s",
-                        state.prev_batch_end.timestamp(),
-                        state.current_batch_end.timestamp(),
+                        state.batch.start_time.timestamp(),
+                        state.batch.end_time.timestamp(),
                 )
 
             values = (
                 all_files_count,
                 file_timestamp,
-                state.prev_batch_end.timestamp(),
-                state.current_batch_end.timestamp(),
+                state.batch.start_time.timestamp(),
+                state.batch.end_time.timestamp(),
                 end - start,
             )
-            bot_log_id = createBotLog(state.conn, logging, values)
+            bot_log_id = createBotLog(conn, logging, values)
 
-            shortlisted_state_hash_df["bot_log_id"] = state.bot_log_id
-            insertStatehashResults(state.conn, logging, shortlisted_state_hash_df)
+            shortlisted_state_hash_df["bot_log_id"] = bot_log_id
+            insertStatehashResults(conn, logging, shortlisted_state_hash_df)
 
             if not point_record_df.empty:
                 point_record_df.loc[:, "amount"] = 1
                 point_record_df.loc[:, "created_at"] = datetime.now(timezone.utc)
-                point_record_df.loc[:, "bot_log_id"] = state.bot_log_id
+                point_record_df.loc[:, "bot_log_id"] = bot_log_id
                 point_record_df = point_record_df[
                     [
                         "file_name",
@@ -336,30 +326,30 @@ def process(state):
                     ]
                 ]
 
-                createPointRecord(state.conn, logging, point_record_df)
+                createPointRecord(conn, logging, point_record_df)
         except Exception as error:
-            state.conn.rollback()
+            conn.rollback()
             logging.error("ERROR: %s", error)
             state.retry_batch()
         else:
-            state.conn.commit()
+            conn.commit()
 
     else:
         # new bot log id hasn't been created, so proceed with the old one
-        bot_log_id = state.bot_log_id
+        bot_log_id = state.batch.bot_log_id
         logging.info("Finished processing data from table.")
     try:
         updateScoreboard(
-            state.conn,
+            conn,
             logging,
-            state.current_batch_end,
+            state.batch.end_time,
             int(os.environ["UPTIME_DAYS_FOR_SCORE"]),
         )
     except Exception as error:
-        state.conn.rollback()
+        conn.rollback()
         logging.error("ERROR: %s", error)
     else:
-        state.conn.commit()
+        conn.commit()
     state.advance_to_next_batch(bot_log_id)
 
 
@@ -383,12 +373,12 @@ def main():
 
     # Step 1 Get previous record and build relations list
     interval = int(os.environ["SURVEY_INTERVAL_MINUTES"])
-    prev_batch_end, cur_batch_end, bot_log_id = getBatchTimings(
-        connection, logging, interval
+    batch = getBatchTimings(
+        connection, logging, timedelta(minutes=interval)
     )
-    state = State(connection, bot_log_id, prev_batch_end, cur_batch_end)
+    state = State(batch)
     while not state.stop:
-        process(state)
+        process(connection, state)
 
 
 if __name__ == "__main__":

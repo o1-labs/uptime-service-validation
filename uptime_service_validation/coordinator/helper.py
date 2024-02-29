@@ -1,21 +1,38 @@
-import psycopg2
-import psycopg2.extras as extras
-import matplotlib.pyplot as plt
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-import pandas as pd
+import matplotlib.pyplot as plt
 import networkx as nx
+import pandas as pd
+import psycopg2
+from psycopg2 import extras
 import requests
+
 
 ERROR = "Error: {0}"
 
+@dataclass
+class Batch:
+    """Represents the timeframe of the current batch and the database
+    identifier of the previous batch for reference."""
+    start_time: datetime
+    end_time: datetime
+    bot_log_id: int
+    interval: timedelta
 
-def getTimeBatches(start_time: datetime, end_time: datetime, range_number: int):
-    diff = (end_time - start_time) / range_number
-    print(diff)
-    time_intervals = []
-    for i in range(range_number):
-        time_intervals.append((start_time + diff * i, start_time + diff * (i + 1)))
-    return time_intervals
+    def next(self, bot_log_id):
+        "Return an object representing the next batch."
+        return self.__class__(
+            start_time=self.end_time,
+            end_time=self.end_time + self.interval,
+            interval=self.interval,
+            bot_log_id =- bot_log_id
+        )
+
+    def split(self, parts_number):
+        "Splits the batch time window into equal parts for parallel proecessing."
+        diff = (self.end_time - self.start_time) / parts_number
+        return ((self.start_time + diff * i, self.start_time + diff * (i + 1)) \
+                for i in range(parts_number))
 
 
 def getBatchTimings(conn, logger, interval):
@@ -29,13 +46,18 @@ def getBatchTimings(conn, logger, interval):
         prev_epoch = result[1]
 
         prev_batch_end = datetime.fromtimestamp(prev_epoch, timezone.utc)
-        cur_batch_end = prev_batch_end + timedelta(minutes=interval)
+        cur_batch_end = prev_batch_end + interval
     except (Exception, psycopg2.DatabaseError) as error:
         logger.error(ERROR.format(error))
-        return -1
+        raise RuntimeError("Could not load the latest batch.")
     finally:
         cursor.close()
-    return prev_batch_end, cur_batch_end, bot_log_id
+    return Batch(
+        start_time = prev_batch_end,
+        end_time = cur_batch_end,
+        bot_log_id = bot_log_id,
+        interval = interval
+    )
 
 
 def getPreviousStatehash(conn, logger, bot_log_id):
