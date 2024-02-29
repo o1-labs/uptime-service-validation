@@ -12,6 +12,7 @@ import requests
 
 ERROR = "Error: {0}"
 
+
 @dataclass
 class Batch:
     """Represents the timeframe of the current batch and the database
@@ -27,14 +28,15 @@ class Batch:
             start_time=self.end_time,
             end_time=self.end_time + self.interval,
             interval=self.interval,
-            bot_log_id =- bot_log_id
+            bot_log_id=- bot_log_id
         )
 
     def split(self, parts_number):
         "Splits the batch time window into equal parts for parallel proecessing."
         diff = (self.end_time - self.start_time) / parts_number
-        return ((self.start_time + diff * i, self.start_time + diff * (i + 1)) \
+        return ((self.start_time + diff * i, self.start_time + diff * (i + 1))
                 for i in range(parts_number))
+
 
 class DB:
     """A wrapper around the database connection, providing high-level methods
@@ -63,10 +65,10 @@ class DB:
         finally:
             cursor.close()
         return Batch(
-            start_time = prev_batch_end,
-            end_time = cur_batch_end,
-            bot_log_id = bot_log_id,
-            interval = interval
+            start_time=prev_batch_end,
+            end_time=cur_batch_end,
+            bot_log_id=bot_log_id,
+            interval=interval
         )
 
     def get_previous_statehash(self, bot_log_id):
@@ -79,7 +81,8 @@ class DB:
             cursor.execute(sql_query, (bot_log_id,))
             result = cursor.fetchall()
 
-            df = pd.DataFrame(result, columns=["parent_state_hash", "state_hash", "weight"])
+            df = pd.DataFrame(
+                result, columns=["parent_state_hash", "state_hash", "weight"])
             previous_result_df = df[["parent_state_hash", "state_hash"]]
             p_selected_node_df = df[["state_hash", "weight"]]
         except (Exception, psycopg2.DatabaseError) as error:
@@ -132,7 +135,7 @@ class DB:
         try:
             extras.execute_batch(cursor, query, tuples, page_size)
         except (Exception, psycopg2.DatabaseError) as error:
-            logger.error(ERROR.format(error))
+            self.logger.error(ERROR.format(error))
             cursor.close()
             return 1
         finally:
@@ -158,11 +161,11 @@ class DB:
         self.logger.info("create_bot_log  end ")
         return result[0]
 
-
     def insert_statehash_results(self, df, page_size=100):
         "Relate statehashes to the batches they were observed in."
         self.logger.info("create_botlogs_statehash  start ")
-        temp_df = df[["parent_state_hash", "state_hash", "weight", "bot_log_id"]]
+        temp_df = df[["parent_state_hash",
+                      "state_hash", "weight", "bot_log_id"]]
         tuples = [tuple(x) for x in temp_df.to_numpy()]
         query = """INSERT INTO bot_logs_statehash(parent_statehash_id, statehash_id, weight, bot_log_id )
                 VALUES (
@@ -182,7 +185,6 @@ class DB:
             cursor.close()
         self.logger.info("create_botlogs_statehash  end ")
         return 0
-
 
     def create_point_record(self, df, page_size=100):
         "Add a new scoring submission to the database."
@@ -271,14 +273,15 @@ class DB:
         return nodes
 
 
-def getRelations(df):
-    return ((parent, child) for child, parent \
-            in df[["state_hash", "parent_state_hash"]].values \
+def get_relations(df):
+    "Extract parent-child relations between statehashes oin a dataframe."
+    return ((parent, child) for child, parent
+            in df[["state_hash", "parent_state_hash"]].values
             if parent in df["state_hash"].values)
 
 
-
-def findNewValuesToInsert(existing_values, new_values):
+def find_new_values_to_insert(existing_values, new_values):
+    "Find the new values to insert into the database."
     return (
         existing_values.merge(new_values, how="outer", indicator=True)
         .loc[lambda x: x["_merge"] == "right_only"]
@@ -287,9 +290,11 @@ def findNewValuesToInsert(existing_values, new_values):
     )
 
 
-def filterStateHashPercentage(df, p=0.34):
+def filter_state_hash_percentage(df, p=0.34):
+    "Filter statehashes by percentage of block producers who submitted them."
     state_hash_list = (
-        df["state_hash"].value_counts().sort_values(ascending=False).index.to_list()
+        df["state_hash"].value_counts().sort_values(
+            ascending=False).index.to_list()
     )
     # get 34% number of blk in given batch
     total_unique_blk = df["block_producer_key"].nunique()
@@ -303,7 +308,9 @@ def filterStateHashPercentage(df, p=0.34):
     return good_state_hash_list
 
 
-def createGraph(batch_df, p_selected_node_df, c_selected_node, p_map):
+def create_graph(batch_df, p_selected_node_df, c_selected_node, p_map):
+    """Create a directed graph of parent-child relations between blocks
+    in the batch dataframe."""
     batch_graph = nx.DiGraph()
     parent_hash_list = batch_df["parent_state_hash"].unique()
     state_hash_list = set(
@@ -313,12 +320,6 @@ def createGraph(batch_df, p_selected_node_df, c_selected_node, p_map):
     selected_parent = [
         parent for parent in parent_hash_list if parent in state_hash_list
     ]
-    """ t1=[w[42:] for w in list(p_selected_node_df['state_hash'].values)]
-    t2=[w[42:] for w in c_selected_node]
-    t3=[w[42:] for w in state_hash_list]
-    batch_graph.add_nodes_from(t1)
-    batch_graph.add_nodes_from( t2)
-    batch_graph.add_nodes_from(t3) """
 
     batch_graph.add_nodes_from(list(p_selected_node_df["state_hash"].values))
     batch_graph.add_nodes_from(c_selected_node)
@@ -337,7 +338,8 @@ def createGraph(batch_df, p_selected_node_df, c_selected_node, p_map):
     return batch_graph
 
 
-def applyWeights(batch_graph, c_selected_node, p_selected_node):
+def apply_weights(batch_graph, c_selected_node, p_selected_node):
+    "Apply weights to to statehashes,"
     for node in list(batch_graph.nodes()):
         if node in c_selected_node:
             batch_graph.nodes[node]["weight"] = 0
@@ -351,7 +353,8 @@ def applyWeights(batch_graph, c_selected_node, p_selected_node):
     return batch_graph
 
 
-def plotGraph(batch_graph, g_pos, title):
+def plot_graph(batch_graph, g_pos, title):
+    "Plot the graph of parent-child relations between state hashes."
     # plot the graph
     plt.figure(figsize=(8, 8))
     plt.title(title)
@@ -375,7 +378,8 @@ def plotGraph(batch_graph, g_pos, title):
     return g_pos
 
 
-def getMinimumWeight(graph, child_node):
+def get_minimum_weight(graph, child_node):
+    "Find the statehash with the minimum weight."
     child_node_weight = graph.nodes[child_node]["weight"]
     for parent in list(graph.predecessors(child_node)):
         lower = min(graph.nodes[parent]["weight"] + 1, child_node_weight)
@@ -384,6 +388,7 @@ def getMinimumWeight(graph, child_node):
 
 
 def bfs(graph, queue_list, node, max_depth=2):
+    "Breadth-first search through the graph."
     visited = list()
     visited.append(node)
     cnt = 2
@@ -391,7 +396,8 @@ def bfs(graph, queue_list, node, max_depth=2):
         m = queue_list.pop(0)
         for neighbour in list(graph.neighbors(m)):
             if neighbour not in visited:
-                graph.nodes[neighbour]["weight"] = getMinimumWeight(graph, neighbour)
+                graph.nodes[neighbour]["weight"] = get_minimum_weight(
+                    graph, neighbour)
                 visited.append(neighbour)
                 # if not neighbour in visited:
                 queue_list.append(neighbour)
@@ -411,8 +417,8 @@ def bfs(graph, queue_list, node, max_depth=2):
     return shortlisted_state_hash_df
 
 
-
-def sendSlackMessage(url, message, logger):
-    payload='{"text": "%s" }' % message
+def send_slack_message(url, message, logger):
+    "Send a slack message to the specified URL."
+    payload = '{"text": "%s" }' % message
     response = requests.post(url, data=payload)
     logger.info(response)

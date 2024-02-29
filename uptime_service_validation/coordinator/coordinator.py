@@ -14,13 +14,13 @@ import pandas as pd
 import psycopg2
 from uptime_service_validation.coordinator.helper import (
     DB,
-    getRelations,
-    findNewValuesToInsert,
-    filterStateHashPercentage,
-    createGraph,
-    applyWeights,
+    get_relations,
+    find_new_values_to_insert,
+    filter_state_hash_percentage,
+    create_graph,
+    apply_weights,
     bfs,
-    sendSlackMessage
+    send_slack_message
 )
 from uptime_service_validation.coordinator.server import (
     bool_env_var_set,
@@ -32,7 +32,8 @@ from uptime_service_validation.coordinator.aws_keyspaces_client import (
 )
 
 # Add project root to python path
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+project_root = os.path.abspath(os.path.join(
+    os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, project_root)
 
 
@@ -54,7 +55,8 @@ class State:
         "If the time window if the current batch is not yet over, sleep until it is."
         if self.batch.end_time > self.current_timestamp:
             delta = timedelta(minutes=2)
-            sleep_interval = (self.batch.end_time - self.current_timestamp) + delta
+            sleep_interval = (self.batch.end_time -
+                              self.current_timestamp) + delta
             time_until = self.current_timestamp + sleep_interval
             logging.info(
                 "All submissions are processed till date. "
@@ -122,14 +124,16 @@ def process(db, state):
     state.wait_until_batch_ends()
     master_df = pd.DataFrame()
     # Step 2 Create time ranges:
-    time_intervals = list(state.batch.split(int(os.environ["MINI_BATCH_NUMBER"])))
+    time_intervals = list(state.batch.split(
+        int(os.environ["MINI_BATCH_NUMBER"])))
     # Step 3 Create Kubernetes ZKValidators and pass mini-batches.
     worker_image = os.environ["WORKER_IMAGE"]
     worker_tag = os.environ["WORKER_TAG"]
     start = time()
     if bool_env_var_set("TEST_ENV"):
         logging.info("running in test environment")
-        setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag)
+        setUpValidatorProcesses(time_intervals, logging,
+                                worker_image, worker_tag)
     else:
         setUpValidatorPods(time_intervals, logging, worker_image, worker_tag)
     end = time()
@@ -143,13 +147,13 @@ def process(db, state):
     webhook_url = os.environ.get("WEBHOOK_URL")
     if webhook_url is not None:
         if end - start < float(os.environ["ALARM_ZK_LOWER_LIMIT_SEC"]):
-            sendSlackMessage(
+            send_slack_message(
                 webhook_url,
                 f"ZkApp Validation took {end - start} seconds, which is too quick",
                 logging,
             )
         if end - start > float(os.environ["ALARM_ZK_UPPER_LIMIT_SEC"]):
-            sendSlackMessage(
+            send_slack_message(
                 webhook_url,
                 f"ZkApp Validation took {end - start} seconds, which is too long",
                 logging,
@@ -211,7 +215,7 @@ def process(db, state):
         state_hash = pd.unique(
             master_df[["state_hash", "parent_state_hash"]].values.ravel("k")
         )
-        state_hash_to_insert = findNewValuesToInsert(
+        state_hash_to_insert = find_new_values_to_insert(
             existing_state_df, pd.DataFrame(state_hash, columns=["statehash"])
         )
         if not state_hash_to_insert.empty:
@@ -220,7 +224,8 @@ def process(db, state):
         nodes_in_cur_batch = pd.DataFrame(
             master_df["submitter"].unique(), columns=["block_producer_key"]
         )
-        node_to_insert = findNewValuesToInsert(existing_nodes, nodes_in_cur_batch)
+        node_to_insert = find_new_values_to_insert(
+            existing_nodes, nodes_in_cur_batch)
 
         if not node_to_insert.empty:
             node_to_insert["updated_at"] = datetime.now(timezone.utc)
@@ -234,17 +239,20 @@ def process(db, state):
             }
         )
 
-        relation_df, p_selected_node_df = db.get_previous_statehash(state.batch.bot_log_id)
-        p_map = list(getRelations(relation_df))
-        c_selected_node = filterStateHashPercentage(master_df)
-        batch_graph = createGraph(master_df, p_selected_node_df, c_selected_node, p_map)
-        weighted_graph = applyWeights(
+        relation_df, p_selected_node_df = db.get_previous_statehash(
+            state.batch.bot_log_id)
+        p_map = list(get_relations(relation_df))
+        c_selected_node = filter_state_hash_percentage(master_df)
+        batch_graph = create_graph(
+            master_df, p_selected_node_df, c_selected_node, p_map)
+        weighted_graph = apply_weights(
             batch_graph=batch_graph,
             c_selected_node=c_selected_node,
             p_selected_node=p_selected_node_df,
         )
 
-        queue_list = list(p_selected_node_df["state_hash"].values) + c_selected_node
+        queue_list = list(
+            p_selected_node_df["state_hash"].values) + c_selected_node
 
         batch_state_hash = list(master_df["state_hash"].unique())
 
@@ -256,7 +264,8 @@ def process(db, state):
             # but it's not used anywhere inside the function)
         )
         point_record_df = master_df[
-            master_df["state_hash"].isin(shortlisted_state_hash_df["state_hash"].values)
+            master_df["state_hash"].isin(
+                shortlisted_state_hash_df["state_hash"].values)
         ]
 
         for index, row in shortlisted_state_hash_df.iterrows():
@@ -271,7 +280,8 @@ def process(db, state):
             parent_hash.append(p_hash)
         shortlisted_state_hash_df["parent_state_hash"] = parent_hash
 
-        p_map = list(getRelations(shortlisted_state_hash_df[["parent_state_hash", "state_hash"]]))
+        p_map = list(get_relations(
+            shortlisted_state_hash_df[["parent_state_hash", "state_hash"]]))
         try:
             if not point_record_df.empty:
                 file_timestamp = master_df.iloc[-1]["file_timestamps"]
@@ -279,8 +289,8 @@ def process(db, state):
                 file_timestamp = state.batch.end_time
                 logging.info(
                     "empty point record for start epoch %s end epoch %s",
-                        state.batch.start_time.timestamp(),
-                        state.batch.end_time.timestamp(),
+                    state.batch.start_time.timestamp(),
+                    state.batch.end_time.timestamp(),
                 )
 
             values = (
@@ -297,7 +307,8 @@ def process(db, state):
 
             if not point_record_df.empty:
                 point_record_df.loc[:, "amount"] = 1
-                point_record_df.loc[:, "created_at"] = datetime.now(timezone.utc)
+                point_record_df.loc[:, "created_at"] = datetime.now(
+                    timezone.utc)
                 point_record_df.loc[:, "bot_log_id"] = bot_log_id
                 point_record_df = point_record_df[
                     [
