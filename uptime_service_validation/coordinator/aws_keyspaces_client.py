@@ -7,7 +7,7 @@ from cassandra_sigv4.auth import SigV4AuthProvider
 from cassandra.policies import DCAwareRoundRobinPolicy
 from ssl import SSLContext, CERT_REQUIRED, PROTOCOL_TLS_CLIENT
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, ByteString, List
 
 import pandas as pd
@@ -208,7 +208,9 @@ class AWSKeyspacesClient:
                 submitted_at_start, submitted_at_end
             )
 
-            shard_condition = "shard in (" + ",".join(map(str, range(1, 60))) + ")"
+            shard_condition = ShardCalculator.calculate_shards_in_range(
+                submitted_at_start, submitted_at_end
+            )
 
             if len(submitted_at_date_list) == 1:
                 submitted_at_date = submitted_at_date_list[0]
@@ -277,6 +279,31 @@ class AWSKeyspacesClient:
 
     def close(self):
         self.cluster.shutdown()
+
+
+class ShardCalculator:
+    @classmethod
+    def calculate_shard(cls, minute, second):
+        base_shard = minute * 10
+        additional_value = second // 6  # Integer division to find the segment
+        return base_shard + additional_value
+
+    @classmethod
+    def calculate_shards_in_range(cls, start_time, end_time):
+        shards = set()
+        current_time = start_time
+
+        while current_time < end_time:
+            shard = cls.calculate_shard(current_time.minute, current_time.second)
+            shards.add(shard)
+            # Move to the next second
+            current_time += timedelta(seconds=1)
+
+        # Format the shards into a CQL statement string
+        shards_list = sorted(list(shards))  # Sort the shards for readability
+        shards_str = ",".join(map(str, shards_list))
+        cql_statement = f"shard in ({shards_str})"
+        return cql_statement
 
 
 # Usage Example
