@@ -116,6 +116,14 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                 name="CASSANDRA_PORT",
                 value=os.environ.get("CASSANDRA_PORT"),
             ),
+            client.V1EnvVar(
+                name="CASSANDRA_USERNAME",
+                value=os.environ.get("CASSANDRA_USERNAME"),
+            ),
+            client.V1EnvVar(
+                name="CASSANDRA_PASSWORD",
+                value=os.environ.get("CASSANDRA_PASSWORD"),
+            ),
             client.V1EnvVar(name="CASSANDRA_USE_SSL", value="1"),
             client.V1EnvVar(
                 name="SSL_CERTFILE",
@@ -218,7 +226,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                         service_account_name=service_account_name,
                         volumes=[auth_volume, entrypoint_volume],
                     )
-                )
+                ),
             ),
         )
 
@@ -272,6 +280,10 @@ def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
             f"CASSANDRA_HOST={cassandra_ip}",
             "-e",
             "CASSANDRA_PORT",
+            "-e",
+            "CASSANDRA_USERNAME",
+            "-e",
+            "CASSANDRA_PASSWORD",
             "-e",
             "AWS_ACCESS_KEY_ID",
             "-e",
