@@ -2,6 +2,7 @@
 the validator processes, distribute work them and, when they're done,
 collect their results, compute scores for the delegation program and
 put the results in the database."""
+
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 import logging
@@ -21,7 +22,7 @@ from uptime_service_validation.coordinator.helper import (
     create_graph,
     apply_weights,
     bfs,
-    send_slack_message
+    send_slack_message,
 )
 from uptime_service_validation.coordinator.server import (
     bool_env_var_set,
@@ -33,8 +34,7 @@ from uptime_service_validation.coordinator.aws_keyspaces_client import (
 )
 
 # Add project root to python path
-project_root = os.path.abspath(os.path.join(
-    os.path.dirname(__file__), "..", ".."))
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, project_root)
 
 
@@ -56,8 +56,7 @@ class State:
         "If the time window if the current batch is not yet over, sleep until it is."
         if self.batch.end_time > self.current_timestamp:
             delta = timedelta(minutes=2)
-            sleep_interval = (self.batch.end_time -
-                              self.current_timestamp) + delta
+            sleep_interval = (self.batch.end_time - self.current_timestamp) + delta
             time_until = self.current_timestamp + sleep_interval
             logging.info(
                 "All submissions are processed till date. "
@@ -105,37 +104,39 @@ class State:
                 self.current_timestamp,
             )
 
-def load_submissions(batch):
+def load_submissions(batch, time_intervals):
     """Load submissions from Cassandra and return them as a DataFrame."""
     submissions = []
     submissions_verified = []
     cassandra = AWSKeyspacesClient()
+
     try:
         cassandra.connect()
-        submissions = cassandra.get_submissions(
-            submitted_at_start=batch.start_time,
-            submitted_at_end=batch.end_time,
-            start_inclusive=True,
-            end_inclusive=False,
-        )
-        # for further processing
-        # we use only submissions verified = True and validation_error = None
-        for submission in submissions:
-            if submission.verified and submission.validation_error is None:
-                submissions_verified.append(submission)
+        for time_interval in time_intervals:
+            submissions.extend(
+                cassandra.get_submissions(
+                    submitted_at_start=time_interval[0],
+                    submitted_at_end=time_interval[1],
+                    start_inclusive=True,
+                    end_inclusive=False,
+                )
+            )
     except Exception as e:
         logging.error("Error in loading submissions: %s", e)
         return pd.DataFrame([])
     finally:
         cassandra.close()
 
+    # for further processing
+    # we use only submissions verified = True and validation_error = None
+    for submission in submissions:
+        if submission.verified and submission.validation_error is None:
+            submissions_verified.append(submission)
+
     all_submissions_count = len(submissions)
     submissions_to_process_count = len(submissions_verified)
     logging.info("number of all submissions: %s", all_submissions_count)
-    logging.info(
-        "number of submissions to process: %s",
-        submissions_to_process_count
-    )
+    logging.info("number of submissions to process: %s", submissions_to_process_count)
     if submissions_to_process_count < all_submissions_count:
         logging.warning(
             "some submissions were not processed, because they were not \
@@ -331,7 +332,7 @@ def process(db, state):
                 logging,
             )
 
-    state_hash_df = load_submissions(state.batch)
+    state_hash_df = load_submissions(state.batch, time_intervals)
     if not state_hash_df.empty:
         try:
             bot_log_id = process_statehash_df(
