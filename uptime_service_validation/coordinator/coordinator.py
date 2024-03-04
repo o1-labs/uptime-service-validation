@@ -105,6 +105,140 @@ class State:
                 self.current_timestamp,
             )
 
+def process_statehash_df(db, batch, state_hash_df, verification_time):
+    all_files_count = state_hash_df.shape[0]
+    master_df = pd.DataFrame()
+    master_df["state_hash"] = state_hash_df["state_hash"]
+    master_df["blockchain_height"] = state_hash_df["height"]
+    master_df["slot"] = pd.to_numeric(state_hash_df["slot"])
+    master_df["parent_state_hash"] = state_hash_df["parent"]
+    master_df["submitter"] = state_hash_df["submitter"]
+    master_df["file_updated"] = state_hash_df["submitted_at"]
+    master_df["file_name"] = (
+        state_hash_df["submitted_at"].astype(str)
+        + "-"
+        + state_hash_df["submitter"].astype(str)
+    )  # Perhaps this should be changed? Filename makes less sense now.
+    master_df["blockchain_epoch"] = state_hash_df["created_at"].apply(
+        lambda row: int(row.timestamp() * 1000)
+    )
+
+    state_hash = pd.unique(
+        master_df[["state_hash", "parent_state_hash"]].values.ravel("k")
+    )
+    existing_state_df = db.get_statehash_df()
+    existing_nodes = db.get_existing_nodes()
+    state_hash_to_insert = find_new_values_to_insert(
+        existing_state_df, pd.DataFrame(state_hash, columns=["statehash"])
+    )
+    if not state_hash_to_insert.empty:
+        db.create_statehash(state_hash_to_insert)
+
+    nodes_in_cur_batch = pd.DataFrame(
+        master_df["submitter"].unique(), columns=["block_producer_key"]
+    )
+    node_to_insert = find_new_values_to_insert(
+        existing_nodes, nodes_in_cur_batch)
+
+    if not node_to_insert.empty:
+        node_to_insert["updated_at"] = datetime.now(timezone.utc)
+        db.create_node_record(node_to_insert, 100)
+
+    master_df.rename(
+        inplace=True,
+        columns={
+            "file_updated": "file_timestamps",
+            "submitter": "block_producer_key",
+        }
+    )
+
+    relation_df, p_selected_node_df = db.get_previous_statehash(
+        batch.bot_log_id)
+    p_map = list(get_relations(relation_df))
+    c_selected_node = filter_state_hash_percentage(master_df)
+    batch_graph = create_graph(
+        master_df, p_selected_node_df, c_selected_node, p_map)
+    weighted_graph = apply_weights(
+        batch_graph=batch_graph,
+        c_selected_node=c_selected_node,
+        p_selected_node=p_selected_node_df,
+    )
+
+    queue_list = list(p_selected_node_df["state_hash"].values) + c_selected_node
+
+    batch_state_hash = list(master_df["state_hash"].unique())
+
+    shortlisted_state_hash_df = bfs(
+        graph=weighted_graph,
+        queue_list=queue_list,
+        node=queue_list[0],
+        # batch_statehash=batch_state_hash, (this used to be here in old code,
+        # but it's not used anywhere inside the function)
+    )
+    point_record_df = master_df[
+        master_df["state_hash"].isin(
+            shortlisted_state_hash_df["state_hash"].values)
+    ]
+
+    for index, row in shortlisted_state_hash_df.iterrows():
+        if not row["state_hash"] in batch_state_hash:
+            shortlisted_state_hash_df.drop(index, inplace=True, axis=0)
+    p_selected_node_df = shortlisted_state_hash_df.copy()
+    parent_hash = []
+    for s in shortlisted_state_hash_df["state_hash"].values:
+        p_hash = master_df[master_df["state_hash"] == s][
+            "parent_state_hash"
+        ].values[0]
+        parent_hash.append(p_hash)
+    shortlisted_state_hash_df["parent_state_hash"] = parent_hash
+
+    p_map = list(get_relations(
+        shortlisted_state_hash_df[["parent_state_hash", "state_hash"]]
+    ))
+    if not point_record_df.empty:
+        file_timestamp = master_df.iloc[-1]["file_timestamps"]
+    else:
+        file_timestamp = batch.end_time
+        logging.info(
+            "empty point record for start epoch %s end epoch %s",
+            batch.start_time.timestamp(),
+            batch.end_time.timestamp(),
+        )
+
+    values = (
+        all_files_count,
+        file_timestamp,
+        batch.start_time.timestamp(),
+        batch.end_time.timestamp(),
+        verification_time.total_seconds()
+    )
+    bot_log_id = db.create_bot_log(values)
+
+    shortlisted_state_hash_df["bot_log_id"] = bot_log_id
+    db.insert_statehash_results(shortlisted_state_hash_df)
+
+    if not point_record_df.empty:
+        point_record_df.loc[:, "amount"] = 1
+        point_record_df.loc[:, "created_at"] = datetime.now(
+            timezone.utc)
+        point_record_df.loc[:, "bot_log_id"] = bot_log_id
+        point_record_df = point_record_df[
+            [
+                "file_name",
+                "file_timestamps",
+                "blockchain_epoch",
+                "block_producer_key",
+                "blockchain_height",
+                "amount",
+                "created_at",
+                "bot_log_id",
+                "state_hash",
+            ]
+        ]
+        db.create_point_record(point_record_df)
+    return bot_log_id
+
+
 def process(db, state):
     """Perform a signle iteration of the coordinator loop, processing exactly
     one batch of submissions. Launch verifiers to process submissions, then
@@ -195,146 +329,18 @@ def process(db, state):
     state_hash_df = pd.DataFrame(
         [asdict(submission) for submission in submissions_verified]
     )
-    all_files_count = state_hash_df.shape[0]
     if not state_hash_df.empty:
-        master_df = pd.DataFrame()
-        master_df["state_hash"] = state_hash_df["state_hash"]
-        master_df["blockchain_height"] = state_hash_df["height"]
-        master_df["slot"] = pd.to_numeric(state_hash_df["slot"])
-        master_df["parent_state_hash"] = state_hash_df["parent"]
-        master_df["submitter"] = state_hash_df["submitter"]
-        master_df["file_updated"] = state_hash_df["submitted_at"]
-        master_df["file_name"] = (
-            state_hash_df["submitted_at"].astype(str)
-            + "-"
-            + state_hash_df["submitter"].astype(str)
-        )  # Perhaps this should be changed? Filename makes less sense now.
-        master_df["blockchain_epoch"] = state_hash_df["created_at"].apply(
-            lambda row: int(row.timestamp() * 1000)
-        )
-
-        state_hash = pd.unique(
-            master_df[["state_hash", "parent_state_hash"]].values.ravel("k")
-        )
-        existing_state_df = db.get_statehash_df()
-        existing_nodes = db.get_existing_nodes()
-        state_hash_to_insert = find_new_values_to_insert(
-            existing_state_df, pd.DataFrame(state_hash, columns=["statehash"])
-        )
-        if not state_hash_to_insert.empty:
-            db.create_statehash(state_hash_to_insert)
-
-        nodes_in_cur_batch = pd.DataFrame(
-            master_df["submitter"].unique(), columns=["block_producer_key"]
-        )
-        node_to_insert = find_new_values_to_insert(
-            existing_nodes, nodes_in_cur_batch)
-
-        if not node_to_insert.empty:
-            node_to_insert["updated_at"] = datetime.now(timezone.utc)
-            db.create_node_record(node_to_insert, 100)
-
-        master_df.rename(
-            inplace=True,
-            columns={
-                "file_updated": "file_timestamps",
-                "submitter": "block_producer_key",
-            }
-        )
-
-        relation_df, p_selected_node_df = db.get_previous_statehash(
-            state.batch.bot_log_id)
-        p_map = list(get_relations(relation_df))
-        c_selected_node = filter_state_hash_percentage(master_df)
-        batch_graph = create_graph(
-            master_df, p_selected_node_df, c_selected_node, p_map)
-        weighted_graph = apply_weights(
-            batch_graph=batch_graph,
-            c_selected_node=c_selected_node,
-            p_selected_node=p_selected_node_df,
-        )
-
-        queue_list = list(
-            p_selected_node_df["state_hash"].values) + c_selected_node
-
-        batch_state_hash = list(master_df["state_hash"].unique())
-
-        shortlisted_state_hash_df = bfs(
-            graph=weighted_graph,
-            queue_list=queue_list,
-            node=queue_list[0],
-            # batch_statehash=batch_state_hash, (this used to be here in old code,
-            # but it's not used anywhere inside the function)
-        )
-        point_record_df = master_df[
-            master_df["state_hash"].isin(
-                shortlisted_state_hash_df["state_hash"].values)
-        ]
-
-        for index, row in shortlisted_state_hash_df.iterrows():
-            if not row["state_hash"] in batch_state_hash:
-                shortlisted_state_hash_df.drop(index, inplace=True, axis=0)
-        p_selected_node_df = shortlisted_state_hash_df.copy()
-        parent_hash = []
-        for s in shortlisted_state_hash_df["state_hash"].values:
-            p_hash = master_df[master_df["state_hash"] == s][
-                "parent_state_hash"
-            ].values[0]
-            parent_hash.append(p_hash)
-        shortlisted_state_hash_df["parent_state_hash"] = parent_hash
-
-        p_map = list(get_relations(
-            shortlisted_state_hash_df[["parent_state_hash", "state_hash"]]))
         try:
-            if not point_record_df.empty:
-                file_timestamp = master_df.iloc[-1]["file_timestamps"]
-            else:
-                file_timestamp = state.batch.end_time
-                logging.info(
-                    "empty point record for start epoch %s end epoch %s",
-                    state.batch.start_time.timestamp(),
-                    state.batch.end_time.timestamp(),
-                )
-
-            values = (
-                all_files_count,
-                file_timestamp,
-                state.batch.start_time.timestamp(),
-                state.batch.end_time.timestamp(),
-                timer.duration.total_seconds(),
+            bot_log_id = process_statehash_df(
+                db, state.batch, state_hash_df, timer.duration
             )
-            bot_log_id = db.create_bot_log(values)
-
-            shortlisted_state_hash_df["bot_log_id"] = bot_log_id
-            db.insert_statehash_results(shortlisted_state_hash_df)
-
-            if not point_record_df.empty:
-                point_record_df.loc[:, "amount"] = 1
-                point_record_df.loc[:, "created_at"] = datetime.now(
-                    timezone.utc)
-                point_record_df.loc[:, "bot_log_id"] = bot_log_id
-                point_record_df = point_record_df[
-                    [
-                        "file_name",
-                        "file_timestamps",
-                        "blockchain_epoch",
-                        "block_producer_key",
-                        "blockchain_height",
-                        "amount",
-                        "created_at",
-                        "bot_log_id",
-                        "state_hash",
-                    ]
-                ]
-
-                db.create_point_record(point_record_df)
         except Exception as error:
             db.connection.rollback()
             logging.error("ERROR: %s", error)
             state.retry_batch()
+            return
         else:
             db.connection.commit()
-
     else:
         # new bot log id hasn't been created, so proceed with the old one
         bot_log_id = state.batch.bot_log_id
