@@ -1,5 +1,6 @@
 """This module contains various helper functions and classes for the
 coordinator."""
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import matplotlib.pyplot as plt
@@ -9,8 +10,28 @@ import psycopg2
 from psycopg2 import extras
 import requests
 
-
 ERROR = "Error: {0}"
+
+
+class Timer:
+    "This is a simple context manager to measure execution time."
+
+    def __init__(self):
+        self.start_time = None
+        self.end_time = None
+
+    @contextmanager
+    def measure(self):
+        """Measure execution time of a code bloc. Store results in start_time
+        and end_time properties."""
+        self.start_time = datetime.now()
+        yield
+        self.end_time = datetime.now()
+
+    @property
+    def duration(self):
+        "Return the duration of the measured interval."
+        return self.end_time - self.start_time
 
 
 @dataclass

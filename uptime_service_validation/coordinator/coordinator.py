@@ -7,13 +7,14 @@ from datetime import datetime, timedelta, timezone
 import logging
 import os
 import sys
-from time import sleep, time
+from time import sleep
 
 from dotenv import load_dotenv
 import pandas as pd
 import psycopg2
 from uptime_service_validation.coordinator.helper import (
     DB,
+    Timer,
     get_relations,
     find_new_values_to_insert,
     filter_state_hash_percentage,
@@ -104,7 +105,6 @@ class State:
                 self.current_timestamp,
             )
 
-
 def process(db, state):
     """Perform a signle iteration of the coordinator loop, processing exactly
     one batch of submissions. Launch verifiers to process submissions, then
@@ -126,17 +126,19 @@ def process(db, state):
     # Step 2 Create time ranges:
     time_intervals = list(state.batch.split(
         int(os.environ["MINI_BATCH_NUMBER"])))
+
     # Step 3 Create Kubernetes ZKValidators and pass mini-batches.
     worker_image = os.environ["WORKER_IMAGE"]
     worker_tag = os.environ["WORKER_TAG"]
-    start = time()
+    timer = Timer()
     if bool_env_var_set("TEST_ENV"):
         logging.info("running in test environment")
-        setUpValidatorProcesses(time_intervals, logging,
-                                worker_image, worker_tag)
+        with timer.measure():
+            setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag)
     else:
-        setUpValidatorPods(time_intervals, logging, worker_image, worker_tag)
-    end = time()
+        with timer.measure():
+            setUpValidatorPods(time_intervals, logging, worker_image, worker_tag)
+
     # Step 4 We need to read the ZKValidator results from a db.
     logging.info(
         "reading ZKValidator results from a db between the time range: %s - %s",
@@ -144,18 +146,19 @@ def process(db, state):
         state.batch.end_time
     )
 
+    logging.info("ZKValidator results read from a db in %s.", timer.duration)
     webhook_url = os.environ.get("WEBHOOK_URL")
     if webhook_url is not None:
-        if end - start < float(os.environ["ALARM_ZK_LOWER_LIMIT_SEC"]):
+        if timer.duration < float(os.environ["ALARM_ZK_LOWER_LIMIT_SEC"]):
             send_slack_message(
                 webhook_url,
-                f"ZkApp Validation took {end - start} seconds, which is too quick",
+                f"ZkApp Validation took {timer.duration} seconds, which is too quick",
                 logging,
             )
-        if end - start > float(os.environ["ALARM_ZK_UPPER_LIMIT_SEC"]):
+        if timer.duration > float(os.environ["ALARM_ZK_UPPER_LIMIT_SEC"]):
             send_slack_message(
                 webhook_url,
-                f"ZkApp Validation took {end - start} seconds, which is too long",
+                f"ZkApp Validation took {timer.duration}, which is too long",
                 logging,
             )
 
@@ -298,7 +301,7 @@ def process(db, state):
                 file_timestamp,
                 state.batch.start_time.timestamp(),
                 state.batch.end_time.timestamp(),
-                end - start,
+                timer.duration.total_seconds(),
             )
             bot_log_id = db.create_bot_log(values)
 
