@@ -114,15 +114,12 @@ def process(db, state):
         state.batch.start_time,
         state.current_timestamp
     )
-    existing_state_df = db.get_statehash_df()
-    existing_nodes = db.get_existing_nodes()
     logging.info(
         "running for batch: %s - %s.", state.batch.start_time, state.batch.end_time
     )
 
     # sleep until batch ends, update the state accordingly, then continue.
     state.wait_until_batch_ends()
-    master_df = pd.DataFrame()
     # Step 2 Create time ranges:
     time_intervals = list(state.batch.split(
         int(os.environ["MINI_BATCH_NUMBER"])))
@@ -200,6 +197,7 @@ def process(db, state):
     )
     all_files_count = state_hash_df.shape[0]
     if not state_hash_df.empty:
+        master_df = pd.DataFrame()
         master_df["state_hash"] = state_hash_df["state_hash"]
         master_df["blockchain_height"] = state_hash_df["height"]
         master_df["slot"] = pd.to_numeric(state_hash_df["slot"])
@@ -218,6 +216,8 @@ def process(db, state):
         state_hash = pd.unique(
             master_df[["state_hash", "parent_state_hash"]].values.ravel("k")
         )
+        existing_state_df = db.get_statehash_df()
+        existing_nodes = db.get_existing_nodes()
         state_hash_to_insert = find_new_values_to_insert(
             existing_state_df, pd.DataFrame(state_hash, columns=["statehash"])
         )
