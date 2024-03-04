@@ -153,6 +153,14 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                 name="NO_CHECKS",
                 value=os.environ.get("NO_CHECKS"),
             ),
+            client.V1EnvVar(
+                name="AWS_ACCESS_KEY_ID",
+                value=os.environ.get("AWS_ACCESS_KEY_ID"),
+            ),
+            client.V1EnvVar(
+                name="AWS_SECRET_ACCESS_KEY",
+                value=os.environ.get("AWS_SECRET_ACCESS_KEY"),
+            ),
         ]
 
         # Entrypoint configmap name
@@ -217,7 +225,8 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
         init_container = client.V1Container(
             name="delegation-verify-init",
             image=f"{worker_image}:{worker_tag}",
-            command=["/bin/authenticate.sh"],
+            # command=["/bin/authenticate.sh"],
+            command=["ls"],
             env=env_vars,
             image_pull_policy=os.environ.get("IMAGE_PULL_POLICY", "IfNotPresent"),
             volume_mounts=[auth_volume_mount],
