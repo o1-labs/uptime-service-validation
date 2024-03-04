@@ -127,7 +127,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
             client.V1EnvVar(name="CASSANDRA_USE_SSL", value="1"),
             client.V1EnvVar(
                 name="SSL_CERTFILE",
-                value="/root/.cassandra/sf-class2-root.crt",
+                value=f"{os.environ.get('SSL_CERTFILE')}:/root/.cassandra/sf-class2-root.crt",
             ),
             client.V1EnvVar(
                 name="CQLSH",
