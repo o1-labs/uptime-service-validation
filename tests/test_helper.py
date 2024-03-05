@@ -11,7 +11,6 @@ def test_get_time_batches():
     interval = timedelta(minutes=5)
     batch = Batch(
         start_time = start_time,
-        end_time = start_time + interval,
         interval = interval,
         bot_log_id = 1
     )

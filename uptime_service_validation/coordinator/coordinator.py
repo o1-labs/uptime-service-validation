@@ -7,13 +7,14 @@ from datetime import datetime, timedelta, timezone
 import logging
 import os
 import sys
-from time import sleep, time
+from time import sleep
 
 from dotenv import load_dotenv
 import pandas as pd
 import psycopg2
 from uptime_service_validation.coordinator.helper import (
     DB,
+    Timer,
     get_relations,
     find_new_values_to_insert,
     filter_state_hash_percentage,
@@ -104,69 +105,16 @@ class State:
                 self.current_timestamp,
             )
 
-
-def process(db, state):
-    """Perform a signle iteration of the coordinator loop, processing exactly
-    one batch of submissions. Launch verifiers to process submissions, then
-    compute scores and store them in the database."""
-    logging.info(
-        "iteration start at: %s, cur_timestamp: %s",
-        state.batch.start_time,
-        state.current_timestamp
-    )
-    existing_state_df = db.get_statehash_df()
-    existing_nodes = db.get_existing_nodes()
-    logging.info(
-        "running for batch: %s - %s.", state.batch.start_time, state.batch.end_time
-    )
-
-    # sleep until batch ends, update the state accordingly, then continue.
-    state.wait_until_batch_ends()
-    master_df = pd.DataFrame()
-    # Step 2 Create time ranges:
-    time_intervals = list(state.batch.split(
-        int(os.environ["MINI_BATCH_NUMBER"])))
-    # Step 3 Create Kubernetes ZKValidators and pass mini-batches.
-    worker_image = os.environ["WORKER_IMAGE"]
-    worker_tag = os.environ["WORKER_TAG"]
-    start = time()
-    if bool_env_var_set("TEST_ENV"):
-        logging.info("running in test environment")
-        setUpValidatorProcesses(time_intervals, logging,
-                                worker_image, worker_tag)
-    else:
-        setUpValidatorPods(time_intervals, logging, worker_image, worker_tag)
-    end = time()
-    # Step 4 We need to read the ZKValidator results from a db.
-    logging.info(
-        "reading ZKValidator results from a db between the time range: %s - %s",
-        state.batch.start_time,
-        state.batch.end_time
-    )
-
-    webhook_url = os.environ.get("WEBHOOK_URL")
-    if webhook_url is not None:
-        if end - start < float(os.environ["ALARM_ZK_LOWER_LIMIT_SEC"]):
-            send_slack_message(
-                webhook_url,
-                f"ZkApp Validation took {end - start} seconds, which is too quick",
-                logging,
-            )
-        if end - start > float(os.environ["ALARM_ZK_UPPER_LIMIT_SEC"]):
-            send_slack_message(
-                webhook_url,
-                f"ZkApp Validation took {end - start} seconds, which is too long",
-                logging,
-            )
-
+def load_submissions(batch):
+    """Load submissions from Cassandra and return them as a DataFrame."""
     submissions = []
     submissions_verified = []
     cassandra = AWSKeyspacesClient()
     try:
         cassandra.connect()
         submissions = cassandra.get_submissions(
-            submitted_at_start=state.batch.start_time,
-            submitted_at_end=state.batch.end_time,
+            submitted_at_start=batch.start_time,
+            submitted_at_end=batch.end_time,
             start_inclusive=True,
             end_inclusive=False,
         )
@@ -175,6 +123,9 @@ def process(db, state):
         for submission in submissions:
             if submission.verified and submission.validation_error is None:
                 submissions_verified.append(submission)
+    except Exception as e:
+        logging.error("Error in loading submissions: %s", e)
+        return pd.DataFrame([])
     finally:
         cassandra.close()
 
@@ -190,148 +141,208 @@ def process(db, state):
             "some submissions were not processed, because they were not \
             verified or had validation errors"
         )
-
-    # Step 5 checks for forks and writes to the db.
-    state_hash_df = pd.DataFrame(
+    return pd.DataFrame(
         [asdict(submission) for submission in submissions_verified]
     )
+
+def process_statehash_df(db, batch, state_hash_df, verification_time):
+    """Process the state hash dataframe and return the master dataframe."""
     all_files_count = state_hash_df.shape[0]
-    if not state_hash_df.empty:
-        master_df["state_hash"] = state_hash_df["state_hash"]
-        master_df["blockchain_height"] = state_hash_df["height"]
-        master_df["slot"] = pd.to_numeric(state_hash_df["slot"])
-        master_df["parent_state_hash"] = state_hash_df["parent"]
-        master_df["submitter"] = state_hash_df["submitter"]
-        master_df["file_updated"] = state_hash_df["submitted_at"]
-        master_df["file_name"] = (
-            state_hash_df["submitted_at"].astype(str)
-            + "-"
-            + state_hash_df["submitter"].astype(str)
-        )  # Perhaps this should be changed? Filename makes less sense now.
-        master_df["blockchain_epoch"] = state_hash_df["created_at"].apply(
-            lambda row: int(row.timestamp() * 1000)
+    master_df = pd.DataFrame()
+    master_df["state_hash"] = state_hash_df["state_hash"]
+    master_df["blockchain_height"] = state_hash_df["height"]
+    master_df["slot"] = pd.to_numeric(state_hash_df["slot"])
+    master_df["parent_state_hash"] = state_hash_df["parent"]
+    master_df["submitter"] = state_hash_df["submitter"]
+    master_df["file_updated"] = state_hash_df["submitted_at"]
+    master_df["file_name"] = (
+        state_hash_df["submitted_at"].astype(str)
+        + "-"
+        + state_hash_df["submitter"].astype(str)
+    )  # Perhaps this should be changed? Filename makes less sense now.
+    master_df["blockchain_epoch"] = state_hash_df["created_at"].apply(
+        lambda row: int(row.timestamp() * 1000)
+    )
+
+    state_hash = pd.unique(
+        master_df[["state_hash", "parent_state_hash"]].values.ravel("k")
+    )
+    existing_state_df = db.get_statehash_df()
+    existing_nodes = db.get_existing_nodes()
+    state_hash_to_insert = find_new_values_to_insert(
+        existing_state_df, pd.DataFrame(state_hash, columns=["statehash"])
+    )
+    if not state_hash_to_insert.empty:
+        db.create_statehash(state_hash_to_insert)
+
+    nodes_in_cur_batch = pd.DataFrame(
+        master_df["submitter"].unique(), columns=["block_producer_key"]
+    )
+    node_to_insert = find_new_values_to_insert(
+        existing_nodes, nodes_in_cur_batch)
+
+    if not node_to_insert.empty:
+        node_to_insert["updated_at"] = datetime.now(timezone.utc)
+        db.create_node_record(node_to_insert, 100)
+
+    master_df.rename(
+        inplace=True,
+        columns={
+            "file_updated": "file_timestamps",
+            "submitter": "block_producer_key",
+        }
+    )
+
+    relation_df, p_selected_node_df = db.get_previous_statehash(
+        batch.bot_log_id)
+    p_map = list(get_relations(relation_df))
+    c_selected_node = filter_state_hash_percentage(master_df)
+    batch_graph = create_graph(
+        master_df, p_selected_node_df, c_selected_node, p_map)
+    weighted_graph = apply_weights(
+        batch_graph=batch_graph,
+        c_selected_node=c_selected_node,
+        p_selected_node=p_selected_node_df,
+    )
+
+    queue_list = list(p_selected_node_df["state_hash"].values) + c_selected_node
+
+    batch_state_hash = list(master_df["state_hash"].unique())
+
+    shortlisted_state_hash_df = bfs(
+        graph=weighted_graph,
+        queue_list=queue_list,
+        node=queue_list[0],
+        # batch_statehash=batch_state_hash, (this used to be here in old code,
+        # but it's not used anywhere inside the function)
+    )
+    point_record_df = master_df[
+        master_df["state_hash"].isin(
+            shortlisted_state_hash_df["state_hash"].values)
+    ]
+
+    for index, row in shortlisted_state_hash_df.iterrows():
+        if not row["state_hash"] in batch_state_hash:
+            shortlisted_state_hash_df.drop(index, inplace=True, axis=0)
+    p_selected_node_df = shortlisted_state_hash_df.copy()
+    parent_hash = []
+    for s in shortlisted_state_hash_df["state_hash"].values:
+        p_hash = master_df[master_df["state_hash"] == s][
+            "parent_state_hash"
+        ].values[0]
+        parent_hash.append(p_hash)
+    shortlisted_state_hash_df["parent_state_hash"] = parent_hash
+
+    p_map = list(get_relations(
+        shortlisted_state_hash_df[["parent_state_hash", "state_hash"]]
+    ))
+    if not point_record_df.empty:
+        file_timestamp = master_df.iloc[-1]["file_timestamps"]
+    else:
+        file_timestamp = batch.end_time
+        logging.info(
+            "empty point record for start epoch %s end epoch %s",
+            batch.start_time.timestamp(),
+            batch.end_time.timestamp(),
         )
 
-        state_hash = pd.unique(
-            master_df[["state_hash", "parent_state_hash"]].values.ravel("k")
-        )
-        state_hash_to_insert = find_new_values_to_insert(
-            existing_state_df, pd.DataFrame(state_hash, columns=["statehash"])
-        )
-        if not state_hash_to_insert.empty:
-            db.create_statehash(state_hash_to_insert)
+    values = (
+        all_files_count,
+        file_timestamp,
+        batch.start_time.timestamp(),
+        batch.end_time.timestamp(),
+        verification_time.total_seconds()
+    )
+    bot_log_id = db.create_bot_log(values)
 
-        nodes_in_cur_batch = pd.DataFrame(
-            master_df["submitter"].unique(), columns=["block_producer_key"]
-        )
-        node_to_insert = find_new_values_to_insert(
-            existing_nodes, nodes_in_cur_batch)
+    shortlisted_state_hash_df["bot_log_id"] = bot_log_id
+    db.insert_statehash_results(shortlisted_state_hash_df)
 
-        if not node_to_insert.empty:
-            node_to_insert["updated_at"] = datetime.now(timezone.utc)
-            db.create_node_record(node_to_insert, 100)
-
-        master_df.rename(
-            inplace=True,
-            columns={
-                "file_updated": "file_timestamps",
-                "submitter": "block_producer_key",
-            }
-        )
-
-        relation_df, p_selected_node_df = db.get_previous_statehash(
-            state.batch.bot_log_id)
-        p_map = list(get_relations(relation_df))
-        c_selected_node = filter_state_hash_percentage(master_df)
-        batch_graph = create_graph(
-            master_df, p_selected_node_df, c_selected_node, p_map)
-        weighted_graph = apply_weights(
-            batch_graph=batch_graph,
-            c_selected_node=c_selected_node,
-            p_selected_node=p_selected_node_df,
-        )
-
-        queue_list = list(
-            p_selected_node_df["state_hash"].values) + c_selected_node
-
-        batch_state_hash = list(master_df["state_hash"].unique())
-
-        shortlisted_state_hash_df = bfs(
-            graph=weighted_graph,
-            queue_list=queue_list,
-            node=queue_list[0],
-            # batch_statehash=batch_state_hash, (this used to be here in old code,
-            # but it's not used anywhere inside the function)
-        )
-        point_record_df = master_df[
-            master_df["state_hash"].isin(
-                shortlisted_state_hash_df["state_hash"].values)
+    if not point_record_df.empty:
+        point_record_df.loc[:, "amount"] = 1
+        point_record_df.loc[:, "created_at"] = datetime.now(
+            timezone.utc)
+        point_record_df.loc[:, "bot_log_id"] = bot_log_id
+        point_record_df = point_record_df[
+            [
+                "file_name",
+                "file_timestamps",
+                "blockchain_epoch",
+                "block_producer_key",
+                "blockchain_height",
+                "amount",
+                "created_at",
+                "bot_log_id",
+                "state_hash",
+            ]
         ]
+        db.create_point_record(point_record_df)
+    return bot_log_id
 
-        for index, row in shortlisted_state_hash_df.iterrows():
-            if not row["state_hash"] in batch_state_hash:
-                shortlisted_state_hash_df.drop(index, inplace=True, axis=0)
-        p_selected_node_df = shortlisted_state_hash_df.copy()
-        parent_hash = []
-        for s in shortlisted_state_hash_df["state_hash"].values:
-            p_hash = master_df[master_df["state_hash"] == s][
-                "parent_state_hash"
-            ].values[0]
-            parent_hash.append(p_hash)
-        shortlisted_state_hash_df["parent_state_hash"] = parent_hash
 
-        p_map = list(get_relations(
-            shortlisted_state_hash_df[["parent_state_hash", "state_hash"]]))
-        try:
-            if not point_record_df.empty:
-                file_timestamp = master_df.iloc[-1]["file_timestamps"]
-            else:
-                file_timestamp = state.batch.end_time
-                logging.info(
-                    "empty point record for start epoch %s end epoch %s",
-                    state.batch.start_time.timestamp(),
-                    state.batch.end_time.timestamp(),
-                )
+def process(db, state):
+    """Perform a signle iteration of the coordinator loop, processing exactly
+    one batch of submissions. Launch verifiers to process submissions, then
+    compute scores and store them in the database."""
+    logging.info(
+        "iteration start at: %s, cur_timestamp: %s",
+        state.batch.start_time,
+        state.current_timestamp
+    )
+    logging.info(
+        "running for batch: %s - %s.", state.batch.start_time, state.batch.end_time
+    )
 
-            values = (
-                all_files_count,
-                file_timestamp,
-                state.batch.start_time.timestamp(),
-                state.batch.end_time.timestamp(),
-                end - start,
+    # sleep until batch ends, update the state accordingly, then continue.
+    state.wait_until_batch_ends()
+    time_intervals = list(state.batch.split(
+        int(os.environ["MINI_BATCH_NUMBER"])))
+
+    worker_image = os.environ["WORKER_IMAGE"]
+    worker_tag = os.environ["WORKER_TAG"]
+    timer = Timer()
+    if bool_env_var_set("TEST_ENV"):
+        logging.info("running in test environment")
+        with timer.measure():
+            setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag)
+    else:
+        with timer.measure():
+            setUpValidatorPods(time_intervals, logging, worker_image, worker_tag)
+
+    logging.info(
+        "reading ZKValidator results from a db between the time range: %s - %s",
+        state.batch.start_time,
+        state.batch.end_time
+    )
+
+    logging.info("ZKValidator results read from a db in %s.", timer.duration)
+    webhook_url = os.environ.get("WEBHOOK_URL")
+    if webhook_url is not None:
+        if timer.duration < float(os.environ["ALARM_ZK_LOWER_LIMIT_SEC"]):
+            send_slack_message(
+                webhook_url,
+                f"ZkApp Validation took {timer.duration} seconds, which is too quick",
+                logging,
             )
-            bot_log_id = db.create_bot_log(values)
+        if timer.duration > float(os.environ["ALARM_ZK_UPPER_LIMIT_SEC"]):
+            send_slack_message(
+                webhook_url,
+                f"ZkApp Validation took {timer.duration}, which is too long",
+                logging,
+            )
 
-            shortlisted_state_hash_df["bot_log_id"] = bot_log_id
-            db.insert_statehash_results(shortlisted_state_hash_df)
-
-            if not point_record_df.empty:
-                point_record_df.loc[:, "amount"] = 1
-                point_record_df.loc[:, "created_at"] = datetime.now(
-                    timezone.utc)
-                point_record_df.loc[:, "bot_log_id"] = bot_log_id
-                point_record_df = point_record_df[
-                    [
-                        "file_name",
-                        "file_timestamps",
-                        "blockchain_epoch",
-                        "block_producer_key",
-                        "blockchain_height",
-                        "amount",
-                        "created_at",
-                        "bot_log_id",
-                        "state_hash",
-                    ]
-                ]
-
-                db.create_point_record(point_record_df)
+    state_hash_df = load_submissions(state.batch)
+    if not state_hash_df.empty:
+        try:
+            bot_log_id = process_statehash_df(
+                db, state.batch, state_hash_df, timer.duration
+            )
+            db.connection.commit()
         except Exception as error:
             db.connection.rollback()
             logging.error("ERROR: %s", error)
             state.retry_batch()
-        else:
-            db.connection.commit()
-
+            return
     else:
         # new bot log id hasn't been created, so proceed with the old one
         bot_log_id = state.batch.bot_log_id
@@ -367,7 +378,6 @@ def main():
         password=os.environ["POSTGRES_PASSWORD"],
     )
 
-    # Step 1 Get previous record and build relations list
     interval = int(os.environ["SURVEY_INTERVAL_MINUTES"])
     db = DB(connection, logging)
     batch = db.get_batch_timings(timedelta(minutes=interval))

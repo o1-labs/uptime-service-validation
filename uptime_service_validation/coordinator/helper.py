@@ -1,5 +1,6 @@
 """This module contains various helper functions and classes for the
 coordinator."""
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import matplotlib.pyplot as plt
@@ -9,8 +10,28 @@ import psycopg2
 from psycopg2 import extras
 import requests
 
-
 ERROR = "Error: {0}"
+
+
+class Timer:
+    "This is a simple context manager to measure execution time."
+
+    def __init__(self):
+        self.start_time = None
+        self.end_time = None
+
+    @contextmanager
+    def measure(self):
+        """Measure execution time of a code bloc. Store results in start_time
+        and end_time properties."""
+        self.start_time = datetime.now()
+        yield
+        self.end_time = datetime.now()
+
+    @property
+    def duration(self):
+        "Return the duration of the measured interval."
+        return self.end_time - self.start_time
 
 
 @dataclass
@@ -18,15 +39,18 @@ class Batch:
     """Represents the timeframe of the current batch and the database
     identifier of the previous batch for reference."""
     start_time: datetime
-    end_time: datetime
     bot_log_id: int
     interval: timedelta
+
+    @property
+    def end_time(self):
+        "Return the end time of the batch."
+        return self.start_time + self.interval
 
     def next(self, bot_log_id):
         "Return an object representing the next batch."
         return self.__class__(
             start_time=self.end_time,
-            end_time=self.end_time + self.interval,
             interval=self.interval,
             bot_log_id=- bot_log_id
         )
@@ -58,7 +82,6 @@ class DB:
             prev_epoch = result[1]
 
             prev_batch_end = datetime.fromtimestamp(prev_epoch, timezone.utc)
-            cur_batch_end = prev_batch_end + interval
         except (Exception, psycopg2.DatabaseError) as error:
             self.logger.error(ERROR.format(error))
             raise RuntimeError("Could not load the latest batch.") from error
@@ -66,7 +89,6 @@ class DB:
             cursor.close()
         return Batch(
             start_time=prev_batch_end,
-            end_time=cur_batch_end,
             bot_log_id=bot_log_id,
             interval=interval
         )
