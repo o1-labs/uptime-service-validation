@@ -129,9 +129,11 @@ def load_submissions(time_intervals):
         cassandra.close()
 
     # for further processing
-    # we use only submissions verified = True and validation_error = None
+    # we use only submissions verified = True and validation_error = None or ""
     for submission in submissions:
-        if submission.verified and submission.validation_error is None:
+        if submission.verified and (
+            submission.validation_error is None or submission.validation_error == ""
+        ):
             submissions_verified.append(submission)
 
     all_submissions_count = len(submissions)
