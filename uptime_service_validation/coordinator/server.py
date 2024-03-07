@@ -218,7 +218,11 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
             resources=resource_requirements_container,
             env=env_vars,
             image_pull_policy=os.environ.get("IMAGE_PULL_POLICY", "IfNotPresent"),
-            volume_mounts=[auth_volume_mount, entrypoint_volume_mount, cassandra_ssl_volume_mount],
+            volume_mounts=[
+                auth_volume_mount,
+                entrypoint_volume_mount,
+                cassandra_ssl_volume_mount,
+            ],
         )
 
         # Define the init container
@@ -308,6 +312,8 @@ def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
             "-e",
             "CASSANDRA_PASSWORD",
             "-e",
+            "AWS_KEYSPACE",
+            "-e",
             "AWS_ACCESS_KEY_ID",
             "-e",
             "AWS_SECRET_ACCESS_KEY",
@@ -324,9 +330,9 @@ def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
             "-e",
             "CQLSH=/bin/cqlsh-expansion",
             image,
-            "cassandra",
-            "--keyspace",
-            os.environ.get("AWS_KEYSPACE"),
+            # "cassandra",
+            # "--keyspace",
+            # os.environ.get("AWS_KEYSPACE"),
             f"{datetime_formatter(mini_batch[0])}",
             f"{datetime_formatter(mini_batch[1])}",
         ]
