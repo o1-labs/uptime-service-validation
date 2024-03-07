@@ -68,6 +68,7 @@ class AWSKeyspacesClient:
                 ssl_context=self.ssl_context,
                 auth_provider=self.auth_provider,
                 port=int(self.cassandra_port),
+                protocol_version=ProtocolVersion.V4,
             )
         else:
             self.auth_provider = self._create_sigv4auth_provider()
