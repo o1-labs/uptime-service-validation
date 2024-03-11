@@ -284,10 +284,8 @@ class AWSKeyspacesClient:
 
 class ShardCalculator:
     @classmethod
-    def calculate_shard(cls, minute, second):
-        base_shard = minute * 10
-        additional_value = second // 6  # Integer division to find the segment
-        return base_shard + additional_value
+    def calculate_shard(cls, hour, minute, second):
+        return (3600 * hour + 60 * minute + second) // 144
 
     @classmethod
     def calculate_shards_in_range(cls, start_time, end_time):
@@ -295,11 +293,25 @@ class ShardCalculator:
         current_time = start_time
 
         while current_time < end_time:
-            shard = cls.calculate_shard(current_time.minute, current_time.second)
+            shard = cls.calculate_shard(
+                current_time.hour, current_time.minute, current_time.second
+            )
             shards.add(shard)
             # Move to the next second
             current_time += timedelta(seconds=1)
 
+        # Check if endTime falls exactly on a new shard boundary and add it if necessary
+        end_shard = cls.calculate_shard(end_time.hour, end_time.minute, end_time.second)
+        if end_shard not in shards:
+            # Check if end_time is exactly on the boundary of a new shard
+            total_seconds_end = (
+                (end_time.hour * 3600) + (end_time.minute * 60) + end_time.second
+            )
+            if total_seconds_end % 144 == 0:
+                shards.add(end_shard)
+
+        # Convert the set of unique shards into a sorted list for readability
+        shards_list = sorted(list(shards))
         # Format the shards into a CQL statement string
         shards_list = sorted(list(shards))  # Sort the shards for readability
         shards_str = ",".join(map(str, shards_list))
