@@ -179,22 +179,10 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
             ),  # 0777 permission in octal as int
         )
 
-        cassandra_ssl_volume = client.V1Volume(
-            name="cassandra-crt",
-            secret=client.V1SecretVolumeSource(
-                secret_name="uptime-service-cassandra-crt"
-            ),
-        )
-
         # Define the volumeMounts
         auth_volume_mount = client.V1VolumeMount(
             name="auth-volume",
             mount_path=os.environ.get("AUTH_VOLUME_MOUNT_PATH"),
-        )
-
-        cassandra_ssl_volume_mount = client.V1VolumeMount(
-            name="cassandra-crt",
-            mount_path="/certs",
         )
 
         entrypoint_volume_mount = client.V1VolumeMount(
@@ -221,7 +209,6 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
             volume_mounts=[
                 auth_volume_mount,
                 entrypoint_volume_mount,
-                cassandra_ssl_volume_mount,
             ],
         )
 
@@ -249,7 +236,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                         containers=[container],
                         restart_policy="Never",
                         service_account_name=service_account_name,
-                        volumes=[auth_volume, entrypoint_volume, cassandra_ssl_volume],
+                        volumes=[auth_volume, entrypoint_volume],
                     )
                 ),
             ),
