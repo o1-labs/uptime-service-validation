@@ -116,10 +116,18 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                 name="CASSANDRA_PORT",
                 value=os.environ.get("CASSANDRA_PORT"),
             ),
+            client.V1EnvVar(
+                name="CASSANDRA_USERNAME",
+                value=os.environ.get("CASSANDRA_USERNAME"),
+            ),
+            client.V1EnvVar(
+                name="CASSANDRA_PASSWORD",
+                value=os.environ.get("CASSANDRA_PASSWORD"),
+            ),
             client.V1EnvVar(name="CASSANDRA_USE_SSL", value="1"),
             client.V1EnvVar(
                 name="SSL_CERTFILE",
-                value="/root/.cassandra/sf-class2-root.crt",
+                value=os.environ.get("SSL_CERTFILE"),
             ),
             client.V1EnvVar(
                 name="CQLSH",
@@ -163,10 +171,22 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
             ),  # 0777 permission in octal as int
         )
 
+        cassandra_ssl_volume = client.V1Volume(
+            name="cassandra-crt",
+            secret=client.V1SecretVolumeSource(
+                secret_name="uptime-service-cassandra-crt"
+            ),
+        )
+
         # Define the volumeMounts
         auth_volume_mount = client.V1VolumeMount(
             name="auth-volume",
             mount_path=os.environ.get("AUTH_VOLUME_MOUNT_PATH"),
+        )
+
+        cassandra_ssl_volume_mount = client.V1VolumeMount(
+            name="cassandra-crt",
+            mount_path="/certs",
         )
 
         entrypoint_volume_mount = client.V1VolumeMount(
@@ -190,7 +210,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
             resources=resource_requirements_container,
             env=env_vars,
             image_pull_policy=os.environ.get("IMAGE_PULL_POLICY", "IfNotPresent"),
-            volume_mounts=[auth_volume_mount, entrypoint_volume_mount],
+            volume_mounts=[auth_volume_mount, entrypoint_volume_mount, cassandra_ssl_volume_mount],
         )
 
         # Define the init container
@@ -216,9 +236,9 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                         containers=[container],
                         restart_policy="Never",
                         service_account_name=service_account_name,
-                        volumes=[auth_volume, entrypoint_volume],
+                        volumes=[auth_volume, entrypoint_volume, cassandra_ssl_volume],
                     )
-                )
+                ),
             ),
         )
 
@@ -272,6 +292,10 @@ def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
             f"CASSANDRA_HOST={cassandra_ip}",
             "-e",
             "CASSANDRA_PORT",
+            "-e",
+            "CASSANDRA_USERNAME",
+            "-e",
+            "CASSANDRA_PASSWORD",
             "-e",
             "AWS_ACCESS_KEY_ID",
             "-e",
