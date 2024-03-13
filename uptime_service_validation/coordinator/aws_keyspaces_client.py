@@ -4,7 +4,7 @@ from cassandra import ProtocolVersion
 from cassandra.auth import PlainTextAuthProvider
 from cassandra.cluster import Cluster, ExecutionProfile, EXEC_PROFILE_DEFAULT
 from cassandra_sigv4.auth import SigV4AuthProvider
-from cassandra.policies import DCAwareRoundRobinPolicy
+from cassandra.policies import DCAwareRoundRobinPolicy, RetryPolicy
 from ssl import SSLContext, CERT_REQUIRED, PROTOCOL_TLS_CLIENT
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -63,11 +63,16 @@ class AWSKeyspacesClient:
             self.auth_provider = PlainTextAuthProvider(
                 username=self.cassandra_user, password=self.cassandra_pass
             )
+            profile = ExecutionProfile(
+                # load_balancing_policy=DCAwareRoundRobinPolicy(local_dc=self.aws_region),
+                retry_policy=RetryPolicy(),
+            )
             self.cluster = Cluster(
                 [self.cassandra_host],
                 ssl_context=self.ssl_context,
                 auth_provider=self.auth_provider,
                 port=int(self.cassandra_port),
+                execution_profiles={EXEC_PROFILE_DEFAULT: profile},
                 protocol_version=ProtocolVersion.V4,
             )
         else:
@@ -121,7 +126,8 @@ class AWSKeyspacesClient:
 
     def _create_cluster(self):
         profile = ExecutionProfile(
-            load_balancing_policy=DCAwareRoundRobinPolicy(local_dc=self.aws_region)
+            load_balancing_policy=DCAwareRoundRobinPolicy(local_dc=self.aws_region),
+            retry_policy=RetryPolicy(),
         )
         return Cluster(
             [self.cassandra_host],
