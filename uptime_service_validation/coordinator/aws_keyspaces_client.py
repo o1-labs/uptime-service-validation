@@ -64,6 +64,7 @@ class AWSKeyspacesClient:
                 username=self.cassandra_user, password=self.cassandra_pass
             )
             profile = ExecutionProfile(
+                # assuming this is for hosted Cassandra, load balancing policy to be determined
                 # load_balancing_policy=DCAwareRoundRobinPolicy(local_dc=self.aws_region),
                 retry_policy=RetryPolicy(),
             )
@@ -77,7 +78,18 @@ class AWSKeyspacesClient:
             )
         else:
             self.auth_provider = self._create_sigv4auth_provider()
-            self.cluster = self._create_cluster()
+            profile = ExecutionProfile(
+                load_balancing_policy=DCAwareRoundRobinPolicy(local_dc=self.aws_region),
+                retry_policy=RetryPolicy(),
+            )
+            self.cluster = Cluster(
+                [self.cassandra_host],
+                ssl_context=self.ssl_context,
+                auth_provider=self.auth_provider,
+                port=int(self.cassandra_port),
+                execution_profiles={EXEC_PROFILE_DEFAULT: profile},
+                protocol_version=ProtocolVersion.V4,
+            )
 
     def _create_ssl_context(self):
         ssl_context = SSLContext(PROTOCOL_TLS_CLIENT)
@@ -123,20 +135,6 @@ class AWSKeyspacesClient:
                 region_name=self.aws_region,
             )
         return SigV4AuthProvider(boto_session)
-
-    def _create_cluster(self):
-        profile = ExecutionProfile(
-            load_balancing_policy=DCAwareRoundRobinPolicy(local_dc=self.aws_region),
-            retry_policy=RetryPolicy(),
-        )
-        return Cluster(
-            [self.cassandra_host],
-            ssl_context=self.ssl_context,
-            auth_provider=self.auth_provider,
-            port=int(self.cassandra_port),
-            execution_profiles={EXEC_PROFILE_DEFAULT: profile},
-            protocol_version=ProtocolVersion.V4,
-        )
 
     def connect(self):
         self.session = self.cluster.connect()
