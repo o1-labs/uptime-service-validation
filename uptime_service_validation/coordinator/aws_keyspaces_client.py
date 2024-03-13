@@ -1,5 +1,7 @@
 import os
 import boto3
+import time
+import random
 from cassandra import ProtocolVersion
 from cassandra.auth import PlainTextAuthProvider
 from cassandra.cluster import Cluster, ExecutionProfile, EXEC_PROFILE_DEFAULT
@@ -58,6 +60,7 @@ class AWSKeyspacesClient:
         self.aws_ssl_certificate_path = os.environ.get("SSL_CERTFILE")
         self.aws_region = self.cassandra_host.split(".")[1]
         self.ssl_context = self._create_ssl_context()
+        self.request_timeout = 20.0
 
         if self.cassandra_user and self.cassandra_pass:
             self.auth_provider = PlainTextAuthProvider(
@@ -66,7 +69,8 @@ class AWSKeyspacesClient:
             profile = ExecutionProfile(
                 # assuming this is for hosted Cassandra, load balancing policy to be determined
                 # load_balancing_policy=DCAwareRoundRobinPolicy(local_dc=self.aws_region),
-                retry_policy=RetryPolicy(),
+                retry_policy=ExponentialBackOffRetryPolicy(),
+                request_timeout=self.request_timeout,
             )
             self.cluster = Cluster(
                 [self.cassandra_host],
@@ -80,7 +84,8 @@ class AWSKeyspacesClient:
             self.auth_provider = self._create_sigv4auth_provider()
             profile = ExecutionProfile(
                 load_balancing_policy=DCAwareRoundRobinPolicy(local_dc=self.aws_region),
-                retry_policy=RetryPolicy(),
+                retry_policy=ExponentialBackOffRetryPolicy(),
+                request_timeout=self.request_timeout,
             )
             self.cluster = Cluster(
                 [self.cassandra_host],
@@ -284,6 +289,56 @@ class AWSKeyspacesClient:
 
     def close(self):
         self.cluster.shutdown()
+
+
+class ExponentialBackOffRetryPolicy(RetryPolicy):
+    def __init__(self, base_delay=0.1, max_delay=10, max_retries=10):
+        self.base_delay = base_delay  # seconds
+        self.max_delay = max_delay  # seconds
+        self.max_retries = max_retries
+
+    def get_backoff_time(self, retry_num):
+        # Calculate exponential backoff time
+        delay = min(self.max_delay, self.base_delay * (2**retry_num))
+        # Add some randomness to avoid thundering herd problem
+        jitter = random.uniform(0, 0.1) * delay
+        return delay + jitter
+
+    def on_read_timeout(
+        self,
+        query,
+        consistency,
+        required_responses,
+        received_responses,
+        data_retrieved,
+        retry_num,
+    ):
+        if retry_num >= self.max_retries:
+            return (self.RETHROW, None)
+        time.sleep(self.get_backoff_time(retry_num))
+        return (self.RETRY, consistency)
+
+    def on_write_timeout(
+        self,
+        query,
+        consistency,
+        write_type,
+        required_responses,
+        received_responses,
+        retry_num,
+    ):
+        if retry_num >= self.max_retries:
+            return (self.RETHROW, None)
+        time.sleep(self.get_backoff_time(retry_num))
+        return (self.RETRY, consistency)
+
+    def on_unavailable(
+        self, query, consistency, required_replica, alive_replica, retry_num
+    ):
+        if retry_num >= self.max_retries:
+            return (self.RETHROW, None)
+        time.sleep(self.get_backoff_time(retry_num))
+        return (self.RETRY_NEXT_HOST, None)
 
 
 class ShardCalculator:
