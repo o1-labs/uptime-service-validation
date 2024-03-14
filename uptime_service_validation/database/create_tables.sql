@@ -1,6 +1,4 @@
---Need to check on this structure. Feels like some of these should be non-null.
-DROP TABLE IF EXISTS bot_logs CASCADE;
-CREATE TABLE bot_logs (
+CREATE TABLE IF NOT EXISTS bot_logs (
 	id SERIAL PRIMARY KEY, 
 	processing_time DOUBLE PRECISION, 
 	files_processed INT, 
@@ -9,15 +7,13 @@ CREATE TABLE bot_logs (
 	batch_end_epoch BIGINT
 );
 
-DROP TABLE IF EXISTS statehash CASCADE;
-CREATE TABLE statehash (
+CREATE TABLE IF NOT EXISTS statehash (
 	id SERIAL PRIMARY KEY,
 	value TEXT
 );
-CREATE UNIQUE INDEX uq_state_hash ON statehash USING btree (value);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_state_hash ON statehash USING btree (value);
 
-DROP TABLE IF EXISTS bot_logs_statehash CASCADE;
-CREATE TABLE bot_logs_statehash (
+CREATE TABLE IF NOT EXISTS bot_logs_statehash (
 	id SERIAL PRIMARY KEY,
 	parent_statehash_id INT, 
 	statehash_id INT, 
@@ -34,8 +30,7 @@ CREATE TABLE bot_logs_statehash (
 		REFERENCES bot_logs(id)
 );
 
-DROP TABLE IF EXISTS nodes CASCADE;
-CREATE TABLE nodes (
+CREATE TABLE IF NOT EXISTS nodes (
 	id SERIAL PRIMARY KEY,
 	block_producer_key TEXT,
 	updated_at TIMESTAMPTZ(6),
@@ -46,8 +41,7 @@ CREATE TABLE nodes (
 	application_status BOOLEAN
 );
 
-DROP TABLE IF EXISTS points CASCADE;
-CREATE TABLE points (
+CREATE TABLE IF NOT EXISTS points (
 	id SERIAL PRIMARY KEY,
 	file_name TEXT,
 	file_timestamps TIMESTAMPTZ(6), 
@@ -69,8 +63,7 @@ CREATE TABLE points (
 		REFERENCES statehash(id)
 );
 
-DROP TABLE IF EXISTS score_history CASCADE;
-CREATE TABLE score_history (
+CREATE TABLE IF NOT EXISTS score_history (
 	id SERIAL PRIMARY KEY,
 	node_id INT,
 	score_at TIMESTAMP(6), 
@@ -80,6 +73,4 @@ CREATE TABLE score_history (
 		FOREIGN KEY(node_id) 
 		REFERENCES nodes(id)
 );
-CREATE UNIQUE INDEX uq_sh_node_score_at ON score_history USING btree (node_id, score_at);
-
--- Point Summary table that is auto-gen?
+CREATE UNIQUE INDEX IF NOT EXISTS uq_sh_node_score_at ON score_history USING btree (node_id, score_at);
