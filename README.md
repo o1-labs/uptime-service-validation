@@ -89,7 +89,7 @@ Create a database and relevant tables before first-time program execution using 
    invoke create-database
    ```
 
-   > :warning: This script drops all existing tables and creates new ones.
+   > **Note:** The script creates `POSTGRES_DB` if not exists and applies `./database/create_tables.sql` script.
 
 2. **Initialize `bot_logs` table**:
 
@@ -105,6 +105,12 @@ Create a database and relevant tables before first-time program execution using 
    # Initialize with a timestamp from n minutes ago
    invoke init-database --mins-ago 20
    ```
+
+It is possible to drop database using:
+
+```
+invoke drop-database
+```
 
 ### AWS Keyspaces/Cassandra Configuration
 
