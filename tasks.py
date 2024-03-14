@@ -23,9 +23,9 @@ def create_database(ctx):
     # Creating the database
     try:
         cursor.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(db_name)))
-        print(f"Database {db_name} created successfully")
+        print(f"Database '{db_name}' created successfully")
     except psycopg2.errors.DuplicateDatabase:
-        print(f"Database {db_name} already exists")
+        print(f"Database '{db_name}' already exists, not creating")
 
     cursor.close()
     conn.close()
@@ -38,13 +38,13 @@ def create_database(ctx):
     cursor = conn.cursor()
 
     # Path to the SQL script relative to tasks.py
-    sql_script_path = "uptime_service_validation/database/createDB.sql"
+    sql_script_path = "uptime_service_validation/database/create_tables.sql"
 
     # Running the SQL script file
     with open(sql_script_path, "r") as file:
         sql_script = file.read()
         cursor.execute(sql_script)
-        print("Database setup completed successfully")
+        print("'create_tables.sql' script completed successfully")
 
     cursor.close()
     conn.close()
