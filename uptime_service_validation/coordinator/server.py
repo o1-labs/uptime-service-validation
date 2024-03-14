@@ -127,11 +127,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
             client.V1EnvVar(name="CASSANDRA_USE_SSL", value="1"),
             client.V1EnvVar(
                 name="SSL_CERTFILE",
-                value=os.environ.get("SSL_CERTFILE"),
-            ),
-            client.V1EnvVar(
-                name="CQLSH",
-                value=os.environ.get("CQLSH"),
+                value="/root/.cassandra/sf-class2-root.crt",
             ),
             client.V1EnvVar(
                 name="AUTH_VOLUME_MOUNT_PATH",
@@ -153,6 +149,14 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                 name="NO_CHECKS",
                 value=os.environ.get("NO_CHECKS"),
             ),
+            client.V1EnvVar(
+                name="AWS_ACCESS_KEY_ID",
+                value=os.environ.get("AWS_ACCESS_KEY_ID"),
+            ),
+            client.V1EnvVar(
+                name="AWS_SECRET_ACCESS_KEY",
+                value=os.environ.get("AWS_SECRET_ACCESS_KEY"),
+            ),
         ]
 
         # Entrypoint configmap name
@@ -171,22 +175,10 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
             ),  # 0777 permission in octal as int
         )
 
-        cassandra_ssl_volume = client.V1Volume(
-            name="cassandra-crt",
-            secret=client.V1SecretVolumeSource(
-                secret_name="uptime-service-cassandra-crt"
-            ),
-        )
-
         # Define the volumeMounts
         auth_volume_mount = client.V1VolumeMount(
             name="auth-volume",
             mount_path=os.environ.get("AUTH_VOLUME_MOUNT_PATH"),
-        )
-
-        cassandra_ssl_volume_mount = client.V1VolumeMount(
-            name="cassandra-crt",
-            mount_path="/certs",
         )
 
         entrypoint_volume_mount = client.V1VolumeMount(
@@ -210,14 +202,18 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
             resources=resource_requirements_container,
             env=env_vars,
             image_pull_policy=os.environ.get("IMAGE_PULL_POLICY", "IfNotPresent"),
-            volume_mounts=[auth_volume_mount, entrypoint_volume_mount, cassandra_ssl_volume_mount],
+            volume_mounts=[
+                auth_volume_mount,
+                entrypoint_volume_mount,
+            ],
         )
 
         # Define the init container
         init_container = client.V1Container(
             name="delegation-verify-init",
             image=f"{worker_image}:{worker_tag}",
-            command=["/bin/authenticate.sh"],
+            # command=["/bin/authenticate.sh"],
+            command=["ls"],
             env=env_vars,
             image_pull_policy=os.environ.get("IMAGE_PULL_POLICY", "IfNotPresent"),
             volume_mounts=[auth_volume_mount],
@@ -236,7 +232,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                         containers=[container],
                         restart_policy="Never",
                         service_account_name=service_account_name,
-                        volumes=[auth_volume, entrypoint_volume, cassandra_ssl_volume],
+                        volumes=[auth_volume, entrypoint_volume],
                     )
                 ),
             ),
@@ -245,7 +241,9 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
         # Create the job and configmap in Kubernetes
         try:
             api_batch.create_namespaced_job(namespace, job)
-            logging.info(f"Job {job_name} created in namespace {namespace}")
+            logging.info(
+                f"Job {job_name} created in namespace {namespace}; start: {datetime_formatter(mini_batch[0])}, end: {datetime_formatter(mini_batch[1])}."
+            )
             jobs.append(job_name)
         except Exception as e:
             logging.error(f"Error creating job {job_name}: {e}")
@@ -297,6 +295,8 @@ def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
             "-e",
             "CASSANDRA_PASSWORD",
             "-e",
+            "AWS_KEYSPACE",
+            "-e",
             "AWS_ACCESS_KEY_ID",
             "-e",
             "AWS_SECRET_ACCESS_KEY",
@@ -310,12 +310,10 @@ def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
             "SSL_CERTFILE=/var/ssl/ssl-cert.crt",
             "-e",
             "CASSANDRA_USE_SSL=1",
-            "-e",
-            "CQLSH=/bin/cqlsh-expansion",
             image,
-            "cassandra",
-            "--keyspace",
-            os.environ.get("AWS_KEYSPACE"),
+            # "cassandra",
+            # "--keyspace",
+            # os.environ.get("AWS_KEYSPACE"),
             f"{datetime_formatter(mini_batch[0])}",
             f"{datetime_formatter(mini_batch[1])}",
         ]

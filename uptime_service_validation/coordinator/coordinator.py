@@ -2,6 +2,7 @@
 the validator processes, distribute work them and, when they're done,
 collect their results, compute scores for the delegation program and
 put the results in the database."""
+
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 import logging
@@ -21,7 +22,7 @@ from uptime_service_validation.coordinator.helper import (
     create_graph,
     apply_weights,
     bfs,
-    send_slack_message
+    send_slack_message,
 )
 from uptime_service_validation.coordinator.server import (
     bool_env_var_set,
@@ -33,8 +34,7 @@ from uptime_service_validation.coordinator.aws_keyspaces_client import (
 )
 
 # Add project root to python path
-project_root = os.path.abspath(os.path.join(
-    os.path.dirname(__file__), "..", ".."))
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, project_root)
 
 
@@ -56,8 +56,7 @@ class State:
         "If the time window if the current batch is not yet over, sleep until it is."
         if self.batch.end_time > self.current_timestamp:
             delta = timedelta(minutes=2)
-            sleep_interval = (self.batch.end_time -
-                              self.current_timestamp) + delta
+            sleep_interval = (self.batch.end_time - self.current_timestamp) + delta
             time_until = self.current_timestamp + sleep_interval
             logging.info(
                 "All submissions are processed till date. "
@@ -105,45 +104,49 @@ class State:
                 self.current_timestamp,
             )
 
-def load_submissions(batch):
+
+def load_submissions(time_intervals):
     """Load submissions from Cassandra and return them as a DataFrame."""
     submissions = []
     submissions_verified = []
     cassandra = AWSKeyspacesClient()
+
     try:
         cassandra.connect()
-        submissions = cassandra.get_submissions(
-            submitted_at_start=batch.start_time,
-            submitted_at_end=batch.end_time,
-            start_inclusive=True,
-            end_inclusive=False,
-        )
-        # for further processing
-        # we use only submissions verified = True and validation_error = None
-        for submission in submissions:
-            if submission.verified and submission.validation_error is None:
-                submissions_verified.append(submission)
+        for time_interval in time_intervals:
+            submissions.extend(
+                cassandra.get_submissions(
+                    submitted_at_start=time_interval[0],
+                    submitted_at_end=time_interval[1],
+                    start_inclusive=True,
+                    end_inclusive=False,
+                )
+            )
     except Exception as e:
         logging.error("Error in loading submissions: %s", e)
         return pd.DataFrame([])
     finally:
         cassandra.close()
 
+    # for further processing
+    # we use only submissions verified = True and validation_error = None or ""
+    for submission in submissions:
+        if submission.verified and (
+            submission.validation_error is None or submission.validation_error == ""
+        ):
+            submissions_verified.append(submission)
+
     all_submissions_count = len(submissions)
     submissions_to_process_count = len(submissions_verified)
     logging.info("number of all submissions: %s", all_submissions_count)
-    logging.info(
-        "number of submissions to process: %s",
-        submissions_to_process_count
-    )
+    logging.info("number of submissions to process: %s", submissions_to_process_count)
     if submissions_to_process_count < all_submissions_count:
         logging.warning(
             "some submissions were not processed, because they were not \
             verified or had validation errors"
         )
-    return pd.DataFrame(
-        [asdict(submission) for submission in submissions_verified]
-    )
+    return pd.DataFrame([asdict(submission) for submission in submissions_verified])
+
 
 def process_statehash_df(db, batch, state_hash_df, verification_time):
     """Process the state hash dataframe and return the master dataframe."""
@@ -178,8 +181,7 @@ def process_statehash_df(db, batch, state_hash_df, verification_time):
     nodes_in_cur_batch = pd.DataFrame(
         master_df["submitter"].unique(), columns=["block_producer_key"]
     )
-    node_to_insert = find_new_values_to_insert(
-        existing_nodes, nodes_in_cur_batch)
+    node_to_insert = find_new_values_to_insert(existing_nodes, nodes_in_cur_batch)
 
     if not node_to_insert.empty:
         node_to_insert["updated_at"] = datetime.now(timezone.utc)
@@ -190,15 +192,13 @@ def process_statehash_df(db, batch, state_hash_df, verification_time):
         columns={
             "file_updated": "file_timestamps",
             "submitter": "block_producer_key",
-        }
+        },
     )
 
-    relation_df, p_selected_node_df = db.get_previous_statehash(
-        batch.bot_log_id)
+    relation_df, p_selected_node_df = db.get_previous_statehash(batch.bot_log_id)
     p_map = list(get_relations(relation_df))
     c_selected_node = filter_state_hash_percentage(master_df)
-    batch_graph = create_graph(
-        master_df, p_selected_node_df, c_selected_node, p_map)
+    batch_graph = create_graph(master_df, p_selected_node_df, c_selected_node, p_map)
     weighted_graph = apply_weights(
         batch_graph=batch_graph,
         c_selected_node=c_selected_node,
@@ -217,8 +217,7 @@ def process_statehash_df(db, batch, state_hash_df, verification_time):
         # but it's not used anywhere inside the function)
     )
     point_record_df = master_df[
-        master_df["state_hash"].isin(
-            shortlisted_state_hash_df["state_hash"].values)
+        master_df["state_hash"].isin(shortlisted_state_hash_df["state_hash"].values)
     ]
 
     for index, row in shortlisted_state_hash_df.iterrows():
@@ -227,15 +226,13 @@ def process_statehash_df(db, batch, state_hash_df, verification_time):
     p_selected_node_df = shortlisted_state_hash_df.copy()
     parent_hash = []
     for s in shortlisted_state_hash_df["state_hash"].values:
-        p_hash = master_df[master_df["state_hash"] == s][
-            "parent_state_hash"
-        ].values[0]
+        p_hash = master_df[master_df["state_hash"] == s]["parent_state_hash"].values[0]
         parent_hash.append(p_hash)
     shortlisted_state_hash_df["parent_state_hash"] = parent_hash
 
-    p_map = list(get_relations(
-        shortlisted_state_hash_df[["parent_state_hash", "state_hash"]]
-    ))
+    p_map = list(
+        get_relations(shortlisted_state_hash_df[["parent_state_hash", "state_hash"]])
+    )
     if not point_record_df.empty:
         file_timestamp = master_df.iloc[-1]["file_timestamps"]
     else:
@@ -251,7 +248,7 @@ def process_statehash_df(db, batch, state_hash_df, verification_time):
         file_timestamp,
         batch.start_time.timestamp(),
         batch.end_time.timestamp(),
-        verification_time.total_seconds()
+        verification_time.total_seconds(),
     )
     bot_log_id = db.create_bot_log(values)
 
@@ -260,8 +257,7 @@ def process_statehash_df(db, batch, state_hash_df, verification_time):
 
     if not point_record_df.empty:
         point_record_df.loc[:, "amount"] = 1
-        point_record_df.loc[:, "created_at"] = datetime.now(
-            timezone.utc)
+        point_record_df.loc[:, "created_at"] = datetime.now(timezone.utc)
         point_record_df.loc[:, "bot_log_id"] = bot_log_id
         point_record_df = point_record_df[
             [
@@ -287,7 +283,7 @@ def process(db, state):
     logging.info(
         "iteration start at: %s, cur_timestamp: %s",
         state.batch.start_time,
-        state.current_timestamp
+        state.current_timestamp,
     )
     logging.info(
         "running for batch: %s - %s.", state.batch.start_time, state.batch.end_time
@@ -295,8 +291,7 @@ def process(db, state):
 
     # sleep until batch ends, update the state accordingly, then continue.
     state.wait_until_batch_ends()
-    time_intervals = list(state.batch.split(
-        int(os.environ["MINI_BATCH_NUMBER"])))
+    time_intervals = list(state.batch.split(int(os.environ["MINI_BATCH_NUMBER"])))
 
     worker_image = os.environ["WORKER_IMAGE"]
     worker_tag = os.environ["WORKER_TAG"]
@@ -312,7 +307,7 @@ def process(db, state):
     logging.info(
         "reading ZKValidator results from a db between the time range: %s - %s",
         state.batch.start_time,
-        state.batch.end_time
+        state.batch.end_time,
     )
 
     logging.info("ZKValidator results read from a db in %s.", timer.duration)
@@ -331,7 +326,7 @@ def process(db, state):
                 logging,
             )
 
-    state_hash_df = load_submissions(state.batch)
+    state_hash_df = load_submissions(time_intervals)
     if not state_hash_df.empty:
         try:
             bot_log_id = process_statehash_df(

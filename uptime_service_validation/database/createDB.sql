@@ -40,7 +40,7 @@ CREATE TABLE nodes (
 	block_producer_key TEXT,
 	updated_at TIMESTAMPTZ(6),
 	score INT,
-	score_percent NUMERIC(6,2),
+	score_percent NUMERIC(10,2),
 	discord_id TEXT,
 	email_id TEXT,
 	application_status BOOLEAN
@@ -75,7 +75,7 @@ CREATE TABLE score_history (
 	node_id INT,
 	score_at TIMESTAMP(6), 
 	score INT, 
-	score_percent NUMERIC(6,2),
+	score_percent NUMERIC(10,2),
 	CONSTRAINT fk_nodes
 		FOREIGN KEY(node_id) 
 		REFERENCES nodes(id)
