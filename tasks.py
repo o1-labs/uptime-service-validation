@@ -106,3 +106,29 @@ def init_database(ctx, batch_end_epoch=None, mins_ago=None, override_empty=False
     conn.commit()
     cursor.close()
     conn.close()
+
+
+@task
+def drop_database(ctx):
+    db_host = os.environ.get("POSTGRES_HOST")
+    db_port = os.environ.get("POSTGRES_PORT")
+    db_name = os.environ.get("POSTGRES_DB")
+    db_user = os.environ.get("POSTGRES_USER")
+    db_password = os.environ.get("POSTGRES_PASSWORD")
+
+    # Establishing connection to PostgreSQL server
+    conn = psycopg2.connect(
+        host=db_host, port=db_port, user=db_user, password=db_password
+    )
+    conn.autocommit = True
+    cursor = conn.cursor()
+
+    # Dropping the database
+    try:
+        cursor.execute(sql.SQL("DROP DATABASE {}").format(sql.Identifier(db_name)))
+        print(f"Database '{db_name}' dropped!")
+    except Exception as e:
+        print(f"Error dropping database '{db_name}'! Error: {e}")
+
+    cursor.close()
+    conn.close()
