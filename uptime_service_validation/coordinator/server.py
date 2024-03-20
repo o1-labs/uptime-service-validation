@@ -124,7 +124,6 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                 name="CASSANDRA_PASSWORD",
                 value=os.environ.get("CASSANDRA_PASSWORD"),
             ),
-            client.V1EnvVar(name="CASSANDRA_USE_SSL", value="1"),
             client.V1EnvVar(
                 name="SSL_CERTFILE",
                 value="/root/.cassandra/sf-class2-root.crt",
@@ -280,9 +279,6 @@ def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
         command = [
             "docker",
             "run",
-            # "--privileged",
-            # "--network",
-            # "host",
             "--rm",
             "-v",
             f"{os.environ.get('SSL_CERTFILE')}:/var/ssl/ssl-cert.crt",
@@ -308,12 +304,7 @@ def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
             "NETWORK_NAME",
             "-e",
             "SSL_CERTFILE=/var/ssl/ssl-cert.crt",
-            "-e",
-            "CASSANDRA_USE_SSL=1",
             image,
-            # "cassandra",
-            # "--keyspace",
-            # os.environ.get("AWS_KEYSPACE"),
             f"{datetime_formatter(mini_batch[0])}",
             f"{datetime_formatter(mini_batch[1])}",
         ]
