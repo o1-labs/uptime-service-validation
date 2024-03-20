@@ -70,7 +70,7 @@ class State:
     def advance_to_next_batch(self, next_bot_log_id):
         """Update the state so that it describes the next batch in line;
         transitioning the state to the next loop pass."""
-        self.retrials_left = os.environ["RETRY_COUNT"]
+        self.retrials_left = int(os.environ["RETRY_COUNT"])
         self.batch = self.batch.next(next_bot_log_id)
         self.__warn_if_work_took_longer_then_expected()
         self.__next_loop()
