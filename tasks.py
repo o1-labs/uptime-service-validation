@@ -123,7 +123,11 @@ def drop_database(ctx):
 
     # Establishing connection to PostgreSQL server
     conn = psycopg2.connect(
-        host=db_host, port=db_port, user=db_user, password=db_password
+        host=db_host,
+        port=db_port,
+        dbname="postgres",
+        user=db_user,
+        password=db_password,
     )
     conn.autocommit = True
     cursor = conn.cursor()
