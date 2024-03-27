@@ -227,7 +227,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                 ttl_seconds_after_finished=ttl_seconds,
                 template=client.V1PodTemplateSpec(
                     metadata=client.V1ObjectMeta(
-                        annotations=dict("karpenter.sh/do-not-evict","true")
+                        annotations={"karpenter.sh/do-not-evict": "true"}
                     ),
                     spec=client.V1PodSpec(
                         init_containers=[init_container],
