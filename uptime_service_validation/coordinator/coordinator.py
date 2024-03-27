@@ -256,6 +256,7 @@ def process_statehash_df(db, batch, state_hash_df, verification_time):
     db.insert_statehash_results(shortlisted_state_hash_df)
 
     if not point_record_df.empty:
+        point_record_df = point_record_df.copy()
         point_record_df.loc[:, "amount"] = 1
         point_record_df.loc[:, "created_at"] = datetime.now(timezone.utc)
         point_record_df.loc[:, "bot_log_id"] = bot_log_id
