@@ -47,7 +47,7 @@ class State:
     def __init__(self, batch):
         self.batch = batch
         self.current_timestamp = datetime.now(timezone.utc)
-        self.retrials_left = os.environ["RETRY_COUNT"]
+        self.retrials_left = int(os.environ["RETRY_COUNT"])
         self.interval = int(os.environ["SURVEY_INTERVAL_MINUTES"])
         self.loop_count = 0
         self.stop = False
@@ -77,12 +77,16 @@ class State:
         self.__update_timestamp()
 
     def retry_batch(self):
-        "Transition the state for retrial of the current (failed) batch."
+        logging.error(
+            "Error in processing, retrying the batch... Retrials left: %s out of %s.",
+            self.retrials_left,
+            os.environ["RETRY_COUNT"],
+        )
         if self.retrials_left > 0:
             self.retrials_left -= 1
-            logging.error("Error in processing, retrying the batch...")
-        logging.error("Error in processing, retry count exceeded... Exitting!")
-        self.stop = True
+        else:
+            logging.error("Error in processing, retry count exceeded... Exitting!")
+            self.stop = True
         self.__warn_if_work_took_longer_then_expected()
         self.__next_loop()
         self.__update_timestamp()
