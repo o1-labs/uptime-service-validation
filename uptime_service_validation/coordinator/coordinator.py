@@ -146,8 +146,7 @@ def load_submissions(time_intervals):
     logging.info("number of submissions to process: %s", submissions_to_process_count)
     if submissions_to_process_count < all_submissions_count:
         logging.warning(
-            "some submissions were not processed, because they were not \
-            verified or had validation errors"
+            "some submissions were not processed, because they were not verified or had validation errors"
         )
     return pd.DataFrame([asdict(submission) for submission in submissions_verified])
 
