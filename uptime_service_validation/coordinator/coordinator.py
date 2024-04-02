@@ -175,16 +175,21 @@ def process_statehash_df(db, batch, state_hash_df, verification_time):
     )
     existing_state_df = db.get_statehash_df()
     existing_nodes = db.get_existing_nodes()
+    logging.info("number of nodes in the previous batch: %s", len(existing_nodes))
     state_hash_to_insert = find_new_values_to_insert(
         existing_state_df, pd.DataFrame(state_hash, columns=["statehash"])
     )
+    logging.info("number of statehashes to insert: %s", len(state_hash_to_insert))
     if not state_hash_to_insert.empty:
         db.create_statehash(state_hash_to_insert)
 
     nodes_in_cur_batch = pd.DataFrame(
         master_df["submitter"].unique(), columns=["block_producer_key"]
     )
+    logging.info("number of nodes in the current batch: %s", len(nodes_in_cur_batch))
+
     node_to_insert = find_new_values_to_insert(existing_nodes, nodes_in_cur_batch)
+    logging.info("number of nodes to insert: %s", len(node_to_insert))
 
     if not node_to_insert.empty:
         node_to_insert["updated_at"] = datetime.now(timezone.utc)
@@ -199,19 +204,26 @@ def process_statehash_df(db, batch, state_hash_df, verification_time):
     )
 
     relation_df, p_selected_node_df = db.get_previous_statehash(batch.bot_log_id)
+
     p_map = list(get_relations(relation_df))
     c_selected_node = filter_state_hash_percentage(master_df)
+
+    logging.info("creating graph for the current batch...")
     batch_graph = create_graph(master_df, p_selected_node_df, c_selected_node, p_map)
+    logging.info("graph created successfully.")
+
+    logging.info("applying weights to the graph...")
     weighted_graph = apply_weights(
         batch_graph=batch_graph,
         c_selected_node=c_selected_node,
         p_selected_node=p_selected_node_df,
     )
+    logging.info("weights applied successfully.")
 
     queue_list = list(p_selected_node_df["state_hash"].values) + c_selected_node
-
     batch_state_hash = list(master_df["state_hash"].unique())
 
+    logging.info("running BFS on the graph...")
     shortlisted_state_hash_df = bfs(
         graph=weighted_graph,
         queue_list=queue_list,
@@ -219,6 +231,7 @@ def process_statehash_df(db, batch, state_hash_df, verification_time):
         # batch_statehash=batch_state_hash, (this used to be here in old code,
         # but it's not used anywhere inside the function)
     )
+    logging.info("BFS completed successfully.")
     point_record_df = master_df[
         master_df["state_hash"].isin(shortlisted_state_hash_df["state_hash"].values)
     ]
