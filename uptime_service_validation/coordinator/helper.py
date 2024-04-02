@@ -296,7 +296,7 @@ class DB:
 
 
 def get_relations(df):
-    "Extract parent-child relations between statehashes oin a dataframe."
+    "Extract parent-child relations between statehashes in a dataframe."
     return (
         (parent, child)
         for child, parent in df[["state_hash", "parent_state_hash"]].values
