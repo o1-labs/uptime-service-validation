@@ -235,7 +235,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                         restart_policy="Never",
                         service_account_name=service_account_name,
                         volumes=[auth_volume, entrypoint_volume],
-                    )
+                    ),
                 ),
             ),
         )
@@ -306,13 +306,14 @@ def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
             "-e",
             "NETWORK_NAME",
             "-e",
+            "NO_CHECKS",
+            "-e",
             "SSL_CERTFILE=/var/ssl/ssl-cert.crt",
             image,
             f"{datetime_formatter(mini_batch[0])}",
             f"{datetime_formatter(mini_batch[1])}",
         ]
-        if bool_env_var_set("NO_CHECKS"):
-            command.append("--no-checks")
+
         cmd_str = " ".join(command)
 
         # Set up environment variables for the process

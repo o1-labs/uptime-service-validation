@@ -1,5 +1,6 @@
 """This module contains various helper functions and classes for the
 coordinator."""
+
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -38,6 +39,7 @@ class Timer:
 class Batch:
     """Represents the timeframe of the current batch and the database
     identifier of the previous batch for reference."""
+
     start_time: datetime
     bot_log_id: int
     interval: timedelta
@@ -50,16 +52,16 @@ class Batch:
     def next(self, bot_log_id):
         "Return an object representing the next batch."
         return self.__class__(
-            start_time=self.end_time,
-            interval=self.interval,
-            bot_log_id=- bot_log_id
+            start_time=self.end_time, interval=self.interval, bot_log_id=-bot_log_id
         )
 
     def split(self, parts_number):
         "Splits the batch time window into equal parts for parallel proecessing."
         diff = (self.end_time - self.start_time) / parts_number
-        return ((self.start_time + diff * i, self.start_time + diff * (i + 1))
-                for i in range(parts_number))
+        return (
+            (self.start_time + diff * i, self.start_time + diff * (i + 1))
+            for i in range(parts_number)
+        )
 
 
 class DB:
@@ -88,9 +90,7 @@ class DB:
         finally:
             cursor.close()
         return Batch(
-            start_time=prev_batch_end,
-            bot_log_id=bot_log_id,
-            interval=interval
+            start_time=prev_batch_end, bot_log_id=bot_log_id, interval=interval
         )
 
     def get_previous_statehash(self, bot_log_id):
@@ -104,7 +104,8 @@ class DB:
             result = cursor.fetchall()
 
             df = pd.DataFrame(
-                result, columns=["parent_state_hash", "state_hash", "weight"])
+                result, columns=["parent_state_hash", "state_hash", "weight"]
+            )
             previous_result_df = df[["parent_state_hash", "state_hash"]]
             p_selected_node_df = df[["state_hash", "weight"]]
         except (Exception, psycopg2.DatabaseError) as error:
@@ -149,7 +150,7 @@ class DB:
 
     def create_node_record(self, df, page_size=100):
         "Add new block producers to the database."
-        self.logger.info("create_point_record  start ")
+        self.logger.info("create_node_record  start ")
         tuples = [tuple(x) for x in df.to_numpy()]
         query = """INSERT INTO nodes ( block_producer_key, updated_at)
                 VALUES ( %s,  %s )  """
@@ -162,7 +163,7 @@ class DB:
             return 1
         finally:
             cursor.close()
-        self.logger.info("create_point_record  end ")
+        self.logger.info("create_node_record  end ")
         return 0
 
     def create_bot_log(self, values):
@@ -186,8 +187,7 @@ class DB:
     def insert_statehash_results(self, df, page_size=100):
         "Relate statehashes to the batches they were observed in."
         self.logger.info("create_botlogs_statehash  start ")
-        temp_df = df[["parent_state_hash",
-                      "state_hash", "weight", "bot_log_id"]]
+        temp_df = df[["parent_state_hash", "state_hash", "weight", "bot_log_id"]]
         tuples = [tuple(x) for x in temp_df.to_numpy()]
         query = """INSERT INTO bot_logs_statehash(parent_statehash_id, statehash_id, weight, bot_log_id )
                 VALUES (
@@ -296,10 +296,12 @@ class DB:
 
 
 def get_relations(df):
-    "Extract parent-child relations between statehashes oin a dataframe."
-    return ((parent, child) for child, parent
-            in df[["state_hash", "parent_state_hash"]].values
-            if parent in df["state_hash"].values)
+    "Extract parent-child relations between statehashes in a dataframe."
+    return (
+        (parent, child)
+        for child, parent in df[["state_hash", "parent_state_hash"]].values
+        if parent in df["state_hash"].values
+    )
 
 
 def find_new_values_to_insert(existing_values, new_values):
@@ -312,19 +314,18 @@ def find_new_values_to_insert(existing_values, new_values):
     )
 
 
-def filter_state_hash_percentage(df, p=0.34):
+def filter_state_hash_percentage(df, p=0.05):
     "Filter statehashes by percentage of block producers who submitted them."
     state_hash_list = (
-        df["state_hash"].value_counts().sort_values(
-            ascending=False).index.to_list()
+        df["state_hash"].value_counts().sort_values(ascending=False).index.to_list()
     )
-    # get 34% number of blk in given batch
+    # get 5% number of blk in given batch
     total_unique_blk = df["block_producer_key"].nunique()
     percentage_result = round(total_unique_blk * p, 2)
     good_state_hash_list = list()
     for s in state_hash_list:
         blk_count = df[df["state_hash"] == s]["block_producer_key"].nunique()
-        # check blk_count for state_hash submitted by blk least 34%
+        # check blk_count for state_hash submitted by blk least 5%
         if blk_count >= percentage_result:
             good_state_hash_list.append(s)
     return good_state_hash_list
@@ -418,8 +419,7 @@ def bfs(graph, queue_list, node, max_depth=2):
         m = queue_list.pop(0)
         for neighbour in list(graph.neighbors(m)):
             if neighbour not in visited:
-                graph.nodes[neighbour]["weight"] = get_minimum_weight(
-                    graph, neighbour)
+                graph.nodes[neighbour]["weight"] = get_minimum_weight(graph, neighbour)
                 visited.append(neighbour)
                 # if not neighbour in visited:
                 queue_list.append(neighbour)
