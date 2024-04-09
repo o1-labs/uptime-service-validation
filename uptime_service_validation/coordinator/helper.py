@@ -250,7 +250,7 @@ class DB:
               )
               , scores as (
                 select p.node_id, count(p.bot_log_id) bp_points
-                from points p join bot_logs b on p.bot_log_id =b.id, epochs
+                from points_summary p join bot_logs b on p.bot_log_id =b.id, epochs
                 where b.batch_start_epoch >= start_epoch and b.batch_end_epoch <= end_epoch
                 group by 1
               )
