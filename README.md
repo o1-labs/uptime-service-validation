@@ -141,6 +141,18 @@ _AWS access key / web identity token:_
 
 > 🗒️ **Note 2:** Docker image of this program already includes cert and has `SSL_CERTFILE` set up, however it can be overriden by providing this env variable to docker.
 
+### Application Status Update
+
+The coordinator is responsible for updating the application statuses based on responses from the participants' registration forms. This process involves retrieving relevant information from a designated Google Spreadsheet and updating the statuses in the database at the start of each validation batch.
+
+The operation can be configured using the following environment variables:
+
+- `IGNORE_APPLICATION_STATUS` - Setting this to `1` instructs the coordinator to bypass the application status update process. This is primarily intended for use in testing environments.
+- `SPREADSHEET_NAME` - Specifies the name of the Google Spreadsheet document containing the registration form responses.
+- `SPREADSHEET_JSON` - The path to the JSON file with the Google Service Account credentials, which are necessary for accessing the spreadsheet.
+
+If the system encounters any issues while updating statuses, it will log the error and proceed with the validation batch without interrupting the process. It's important to note that the application status plays a crucial role in the Leaderboard UI: only block-producers with `application_status = true` are eligible to appear on the Leaderboard. This ensures that only registered and validated participants are displayed.
+
 ### Test Configuration
 
 By default, the program runs `stateless-verification-tool` in separate Kubernetes pods. For testing purposes, it can be configured to run them as subprocesses on the same machine. Set the optional environment variable `TEST_ENV=1` for this mode.
