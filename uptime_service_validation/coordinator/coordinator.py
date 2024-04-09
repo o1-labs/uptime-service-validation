@@ -23,6 +23,7 @@ from uptime_service_validation.coordinator.helper import (
     apply_weights,
     bfs,
     send_slack_message,
+    get_application_details,
 )
 from uptime_service_validation.coordinator.server import (
     bool_env_var_set,
@@ -395,6 +396,17 @@ def main():
     batch = db.get_batch_timings(timedelta(minutes=interval))
     state = State(batch)
     while not state.stop:
+        if os.environ.get("IGNORE_APPLICATION_STATUS") == "1":
+            logging.info("Ignoring application status update.")
+        else:
+            try:
+                contact_details = get_application_details()
+                db.update_application_status(contact_details)
+            except Exception as error:
+                logging.error(
+                    "ERROR updating application status: %s", error, exc_info=True
+                )
+
         process(db, state)
 
 

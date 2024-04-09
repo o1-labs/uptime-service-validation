@@ -18,6 +18,8 @@ psycopg2 = "^2.9.9"
 cassandra-driver = "^3.28.0"
 cassandra-sigv4 = { git = "https://github.com/aws/aws-sigv4-auth-cassandra-python-driver-plugin.git" }
 invoke = "^2.2.0"
+gspread = "^6.1.0"
+oauth2client = "^4.1.3"
 
 [tool.poetry.scripts]
 start = "uptime_service_validation.coordinator.coordinator:main"

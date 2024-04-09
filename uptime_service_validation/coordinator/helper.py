@@ -4,12 +4,15 @@ coordinator."""
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+import os
 import matplotlib.pyplot as plt
 import networkx as nx
 import pandas as pd
 import psycopg2
 from psycopg2 import extras
 import requests
+from oauth2client.service_account import ServiceAccountCredentials
+import gspread
 
 ERROR = "Error: {0}"
 
@@ -293,6 +296,46 @@ class DB:
         finally:
             cursor.close()
         return nodes
+
+    # tuples = [discord_id, block_producer_email, block_producer_key]
+    def update_application_status(self, tuples, page_size=100):
+        "Update the application status of the block producers."
+        self.logger.info("update_application_status  start ")
+        cursor = self.connection.cursor()
+        try:
+            sql = """update nodes set application_status = true, discord_id =%s, email_id =%s
+                where block_producer_key= %s """
+            extras.execute_batch(cursor, sql, tuples, page_size)
+        except (Exception, psycopg2.DatabaseError) as error:
+            self.logger.error(ERROR.format(error))
+            cursor.close()
+            return -1
+        finally:
+            cursor.close()
+            self.connection.commit()
+        self.logger.info("update_application_status  end ")
+        return 0
+
+
+def get_application_details():
+    os.environ["PYTHONIOENCODING"] = "utf-8"
+    spreadsheet_scope = [
+        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/drive",
+    ]
+    spreadsheet_name = str(os.environ["SPREADSHEET_NAME"]).strip()
+    spreadsheet_json = str(os.environ["SPREADSHEET_JSON"]).strip()
+    creds = ServiceAccountCredentials.from_json_keyfile_name(
+        spreadsheet_json, spreadsheet_scope
+    )
+    client = gspread.authorize(creds)
+    sheet = client.open(spreadsheet_name)
+    sheet_instance = sheet.get_worksheet(0)
+    records_data = sheet_instance.get_all_records()
+    table_data = pd.DataFrame(records_data)
+    spread_df = table_data.iloc[:, [2, 3, 4]]
+    tuples = [tuple(x) for x in spread_df.to_numpy()]
+    return tuples
 
 
 def get_relations(df):
