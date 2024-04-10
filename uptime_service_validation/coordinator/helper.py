@@ -231,7 +231,16 @@ class DB:
 
     def update_scoreboard(self, score_till_time, uptime_days=30):
         "Update the block producer scores."
-        self.logger.info("updateScoreboard  start ")
+        self.logger.info(
+            "updateScoreboard  start (score_till_time: %s, uptime_days: %s) ",
+            score_till_time,
+            uptime_days,
+        )
+        # update the scores
+        # Note that points_summary table is updated by the database trigger
+        # on every insert to the points table.
+        # It holds one record per block producer per batch if they submitted any valid submissions within the batch.
+        # Scores are calculated based on the points_summary table.
         sql = """with vars  (snapshot_date, start_date) as( values (%s AT TIME ZONE 'UTC',
                         (%s - interval '%s' day) AT TIME ZONE 'UTC')
               )
@@ -242,12 +251,12 @@ class DB:
               , b_logs as(
                 select (count(1) ) as surveys
                 from bot_logs b , epochs e
-                where b.batch_start_epoch >= start_epoch and  b.batch_end_epoch <= end_epoch
+                where b.batch_start_epoch >= start_epoch and  b.batch_end_epoch <= end_epoch and b.files_processed > 0
               )
               , scores as (
                 select p.node_id, count(p.bot_log_id) bp_points
-                from points p join bot_logs b on p.bot_log_id =b.id, epochs
-                where b.batch_start_epoch >= start_epoch and  b.batch_end_epoch <= end_epoch
+                from points_summary p join bot_logs b on p.bot_log_id =b.id, epochs
+                where b.batch_start_epoch >= start_epoch and b.batch_end_epoch <= end_epoch
                 group by 1
               )
               , final_scores as (
