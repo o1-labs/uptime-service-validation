@@ -325,9 +325,11 @@ def get_contact_details_from_spreadsheet():
         "https://www.googleapis.com/auth/drive",
     ]
     spreadsheet_name = str(os.environ["SPREADSHEET_NAME"]).strip()
-    spreadsheet_json = str(os.environ["SPREADSHEET_JSON"]).strip()
+    spreadsheet_credentials_json = str(
+        os.environ["SPREADSHEET_CREDENTIALS_JSON"]
+    ).strip()
     creds = ServiceAccountCredentials.from_json_keyfile_name(
-        spreadsheet_json, spreadsheet_scope
+        spreadsheet_credentials_json, spreadsheet_scope
     )
     client = gspread.authorize(creds)
     sheet = client.open(spreadsheet_name)

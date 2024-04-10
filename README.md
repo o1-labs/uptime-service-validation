@@ -149,7 +149,7 @@ The operation can be configured using the following environment variables:
 
 - `IGNORE_APPLICATION_STATUS` - Setting this to `1` instructs the coordinator to bypass the application status update process. This is primarily intended for use in testing environments.
 - `SPREADSHEET_NAME` - Specifies the name of the Google Spreadsheet document containing the registration form responses.
-- `SPREADSHEET_JSON` - The path to the JSON file with the Google Service Account credentials, which are necessary for accessing the spreadsheet.
+- `SPREADSHEET_CREDENTIALS_JSON` - The path to the JSON file with the Google Service Account credentials, which are necessary for accessing the spreadsheet.
 
 If the system encounters any issues while updating statuses, it will log the error and proceed with the validation batch without interrupting the process. It's important to note that the application status plays a crucial role in the Leaderboard UI: only block-producers with `application_status = true` are eligible to appear on the Leaderboard. This ensures that only registered and validated participants are displayed.
 
