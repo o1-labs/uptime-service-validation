@@ -236,6 +236,11 @@ class DB:
             score_till_time,
             uptime_days,
         )
+        # update the scores
+        # Note that points_summary table is updated by the database trigger
+        # on every insert to the points table.
+        # It holds one record per block producer per batch if they submitted any valid submissions within the batch.
+        # Scores are calculated based on the points_summary table.
         sql = """with vars  (snapshot_date, start_date) as( values (%s AT TIME ZONE 'UTC',
                         (%s - interval '%s' day) AT TIME ZONE 'UTC')
               )

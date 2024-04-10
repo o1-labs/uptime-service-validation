@@ -7,6 +7,8 @@
 This repository is home for Validator/Coordinator component for Mina Delegation Program.
 This component is responsible for taking submissions data gathered by [uptime-service-backend](https://github.com/MinaFoundation/uptime-service-backend) and running validation against them using [stateless-verification-tool](https://github.com/MinaProtocol/mina/pull/14593). Next, based on these validation results, the Coordinator builds its own database containing uptime score.
 
+**Important note:** If block producer submits at least one valid submission within the validation batch, it will be granted one point. There is a table `points_summary` that is instrumental for calculating scores. It is updated by a database trigger on every insert to the `points` table. While `points` table 
+holds one point for each valid submission, the `points_summary` holds only one point if at least one submission happened in the batch. This is crucial for keeping correct score percentage.
 
 ## Getting Started
 
