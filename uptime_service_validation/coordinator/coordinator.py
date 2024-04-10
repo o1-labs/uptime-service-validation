@@ -23,7 +23,7 @@ from uptime_service_validation.coordinator.helper import (
     apply_weights,
     bfs,
     send_slack_message,
-    get_application_details,
+    get_contact_details_from_spreadsheet,
 )
 from uptime_service_validation.coordinator.server import (
     bool_env_var_set,
@@ -400,7 +400,7 @@ def main():
             logging.info("Ignoring application status update.")
         else:
             try:
-                contact_details = get_application_details()
+                contact_details = get_contact_details_from_spreadsheet()
                 db.update_application_status(contact_details)
             except Exception as error:
                 logging.error(

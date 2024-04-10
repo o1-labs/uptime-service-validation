@@ -317,7 +317,8 @@ class DB:
         return 0
 
 
-def get_application_details():
+def get_contact_details_from_spreadsheet():
+    "Get the contact details of the block producers from the Google spreadsheet."
     os.environ["PYTHONIOENCODING"] = "utf-8"
     spreadsheet_scope = [
         "https://spreadsheets.google.com/feeds",
