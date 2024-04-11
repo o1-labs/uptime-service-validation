@@ -29,15 +29,17 @@ jobs:
         uses: actions/checkout@v3
       - name: 🏷️ Generate Tag
         run: |
+          BRANCH_OR_TAG=$(basename ${{ github.ref }})
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             PREFIX=${{ env.DOCKER_TAG_PREFIX }}
+            SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)
+            echo "TAG=$PREFIX-$BRANCH_OR_TAG-$SHORT_SHA" >> $GITHUB_ENV
           elif [ "${{ github.event_name }}" == "push" ] && [ -n "${{ github.event.ref }}" ]; then
-            PREFIX=$(basename ${{ github.ref }})
+            echo "TAG=$BRANCH_OR_TAG" >> $GITHUB_ENV
           else
             echo "Invalid event. Exiting..."
             exit 1
           fi
-          echo "TAG=$PREFIX-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_ENV
       - name: 🔑 ECR Login
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
