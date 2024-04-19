@@ -111,7 +111,11 @@ class State:
 
 
 def load_submissions(time_intervals):
-    """Load submissions from Cassandra and return them as a DataFrame."""
+    """
+    Load submissions from Cassandra:
+     - return validated subs as a DataFrame for further processing.
+     - return all subs for storing in the submissions_by_submitter table.
+    """
     submissions = []
     submissions_verified = []
     cassandra = AWSKeyspacesClient()
@@ -149,7 +153,10 @@ def load_submissions(time_intervals):
         logging.warning(
             "some submissions were not processed, because they were not verified or had validation errors"
         )
-    return pd.DataFrame([asdict(submission) for submission in submissions_verified])
+    return [
+        pd.DataFrame([asdict(submission) for submission in submissions_verified]),
+        submissions,
+    ]
 
 
 def process_statehash_df(db, batch, state_hash_df, verification_time):
@@ -344,7 +351,7 @@ def process(db, state):
                 logging,
             )
 
-    state_hash_df = load_submissions(time_intervals)
+    state_hash_df, all_submissions = load_submissions(time_intervals)
     if not state_hash_df.empty:
         try:
             bot_log_id = process_statehash_df(
@@ -365,6 +372,7 @@ def process(db, state):
             state.batch.end_time,
             int(os.environ["UPTIME_DAYS_FOR_SCORE"]),
         )
+        db.insert_submissions(all_submissions)
     except Exception as error:
         db.connection.rollback()
         logging.error("ERROR: %s", error)
