@@ -76,6 +76,28 @@ CREATE TABLE IF NOT EXISTS score_history (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_sh_node_score_at ON score_history USING btree (node_id, score_at);
 
+-- Table submission_by_submitter is used to store the submissions made by each submitter.
+-- This table is useful to analyze the submissions made by each submitter no matter the status of the submission.
+-- It is a light copy of the Cassandra submissions table exluding some of the data (like snark_work, raw_block, etc.)
+CREATE TABLE IF NOT EXISTS submissions_by_submitter (
+    id SERIAL PRIMARY KEY,
+    submitted_at_date DATE NOT NULL,
+    submitted_at TIMESTAMP NOT NULL,
+    submitter TEXT NOT NULL,
+    remote_addr TEXT,
+    block_hash TEXT,
+    state_hash TEXT,
+    parent TEXT,
+    height INTEGER,
+    slot INTEGER,
+    validation_error TEXT,
+    verified BOOLEAN
+);
+-- Create an index on submitter and submitted_at_date for quick lookups by submitter
+CREATE INDEX idx_submitter_date ON submissions_by_submitter (submitter, submitted_at_date);
+-- Create an index on submitter and submitted_at for queries that might need to sort or filter by exact timestamps
+CREATE INDEX idx_submitter_datetime ON submissions_by_submitter (submitter, submitted_at DESC);
+
 -- Table creation for points_summary
 -- The points_summary table aggregates data related to node scoring.
 -- It is designed to hold a unique combination of bot_log_id and node_id.
