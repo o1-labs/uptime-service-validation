@@ -325,6 +325,46 @@ class DB:
         self.logger.info("update_application_status  end ")
         return 0
 
+    def insert_submissions(self, submissions):
+        """Insert a list of Submission objects into the submissions_by_submitter table."""
+        self.logger.info(
+            "insert_submissions  start (submissions: %s)", len(submissions)
+        )
+        insert_query = """
+            INSERT INTO submissions_by_submitter (
+                submitted_at_date, submitted_at, submitter, remote_addr, block_hash, 
+                state_hash, parent, height, slot, validation_error, verified
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        values = [
+            (
+                submission.submitted_at_date,
+                submission.submitted_at,
+                submission.submitter,
+                submission.remote_addr,
+                submission.block_hash,
+                submission.state_hash,
+                submission.parent,
+                submission.height,
+                submission.slot,
+                submission.validation_error,
+                submission.verified,
+            )
+            for submission in submissions
+        ]
+
+        cursor = self.connection.cursor()
+        try:
+            extras.execute_batch(cursor, insert_query, values)
+        except (Exception, psycopg2.DatabaseError) as error:
+            self.logger.error("Error inserting submissions: %s", error)
+            cursor.close()
+            return -1
+        finally:
+            cursor.close()
+        self.logger.info("insert_submissions  end")
+        return 0
+
 
 def get_contact_details_from_spreadsheet():
     "Get the contact details of the block producers from the Google spreadsheet."
