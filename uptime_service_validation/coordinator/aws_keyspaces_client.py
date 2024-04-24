@@ -14,6 +14,8 @@ from typing import Optional, ByteString, List
 
 import pandas as pd
 
+from uptime_service_validation.coordinator.config import Config
+
 
 @dataclass
 class Submission:
@@ -44,20 +46,20 @@ class Block:
 class AWSKeyspacesClient:
     def __init__(self):
         # Load environment variables
-        self.aws_keyspace = os.environ.get("AWS_KEYSPACE")
-        self.cassandra_host = os.environ.get("CASSANDRA_HOST")
-        self.cassandra_port = os.environ.get("CASSANDRA_PORT")
-        self.cassandra_user = os.environ.get("CASSANDRA_USERNAME")
-        self.cassandra_pass = os.environ.get("CASSANDRA_PASSWORD")
+        self.aws_keyspace = Config.AWS_KEYSPACE
+        self.cassandra_host = Config.CASSANDRA_HOST
+        self.cassandra_port = Config.CASSANDRA_PORT
+        self.cassandra_user = Config.CASSANDRA_USERNAME
+        self.cassandra_pass = Config.CASSANDRA_PASSWORD
         # if AWS_ROLE_ARN, AWS_ROLE_SESSION_NAME and AWS_WEB_IDENTITY_TOKEN_FILE are set,
         # we are using AWS STS to assume a role and get temporary credentials
         # if they are not set, we are using AWS IAM user credentials (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
-        self.role_arn = os.environ.get("AWS_ROLE_ARN")
-        self.role_session_name = os.environ.get("AWS_ROLE_SESSION_NAME")
-        self.web_identity_token_file = os.environ.get("AWS_WEB_IDENTITY_TOKEN_FILE")
-        self.aws_access_key_id = os.environ.get("AWS_ACCESS_KEY_ID")
-        self.aws_secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
-        self.aws_ssl_certificate_path = os.environ.get("SSL_CERTFILE")
+        self.role_arn = Config.AWS_ROLE_ARN
+        self.role_session_name = Config.AWS_ROLE_SESSION_NAME
+        self.web_identity_token_file = Config.AWS_WEB_IDENTITY_TOKEN_FILE
+        self.aws_access_key_id = Config.AWS_ACCESS_KEY_ID
+        self.aws_secret_access_key = Config.AWS_SECRET_ACCESS_KEY
+        self.aws_ssl_certificate_path = Config.SSL_CERTFILE
         self.aws_region = self.cassandra_host.split(".")[1]
         self.ssl_context = self._create_ssl_context()
         self.request_timeout = 20.0

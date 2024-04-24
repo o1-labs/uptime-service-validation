@@ -14,6 +14,8 @@ import requests
 from oauth2client.service_account import ServiceAccountCredentials
 import gspread
 
+from uptime_service_validation.coordinator.config import Config
+
 ERROR = "Error: {0}"
 
 
@@ -369,14 +371,9 @@ class DB:
 def get_contact_details_from_spreadsheet():
     "Get the contact details of the block producers from the Google spreadsheet."
     os.environ["PYTHONIOENCODING"] = "utf-8"
-    spreadsheet_scope = [
-        "https://spreadsheets.google.com/feeds",
-        "https://www.googleapis.com/auth/drive",
-    ]
-    spreadsheet_name = str(os.environ["SPREADSHEET_NAME"]).strip()
-    spreadsheet_credentials_json = str(
-        os.environ["SPREADSHEET_CREDENTIALS_JSON"]
-    ).strip()
+    spreadsheet_scope = Config.SPREADSHEET_SCOPE
+    spreadsheet_name = Config.SPREADSHEET_NAME
+    spreadsheet_credentials_json = Config.SPREADSHEET_CREDENTIALS_JSON
     creds = ServiceAccountCredentials.from_json_keyfile_name(
         spreadsheet_credentials_json, spreadsheet_scope
     )

@@ -8,16 +8,7 @@ import subprocess
 import time
 import socket
 
-
-def bool_env_var_set(env_var_name):
-    """
-    Checks if an environment variable is set and is set to a truthy value.
-
-    :param env_var_name: The name of the environment variable.
-    :return: True if the environment variable is set and is set to a truthy value.
-    """
-    env_var = os.environ.get(env_var_name)
-    return env_var is not None and env_var.lower() in ["true", "1"]
+from uptime_service_validation.coordinator.config import Config, bool_env_var_set
 
 
 def try_get_hostname_ip(hostname, logger, max_retries=5, initial_wait=0.2):
@@ -31,6 +22,8 @@ def try_get_hostname_ip(hostname, logger, max_retries=5, initial_wait=0.2):
     :return: The resolved IP address or the original hostname if resolution fails.
     """
     retry_wait = initial_wait
+    if not hostname:
+        return "0.0.0.0"
     for i in range(max_retries):
         try:
             ip_address = socket.gethostbyname(hostname)
@@ -79,7 +72,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
     # List to keep track of job names
     jobs = []
     cassandra_ip = try_get_hostname_ip(os.environ.get("CASSANDRA_HOST"), logging)
-    if bool_env_var_set("NO_CHECKS"):
+    if Config.no_checks():
         logging.info("stateless-verifier will run with --no-checks flag")
     for index, mini_batch in enumerate(time_intervals):
 
@@ -101,12 +94,12 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                 value=os.environ.get("AWS_REGION"),
             ),
             client.V1EnvVar(
-                name="AWS_KEYSPACE",
-                value=os.environ.get("AWS_KEYSPACE"),
-            ),
-            client.V1EnvVar(
                 name="AWS_S3_BUCKET",
                 value=os.environ.get("AWS_S3_BUCKET"),
+            ),
+            client.V1EnvVar(
+                name="AWS_KEYSPACE",
+                value=os.environ.get("AWS_KEYSPACE"),
             ),
             client.V1EnvVar(
                 name="CASSANDRA_HOST",
@@ -146,7 +139,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
             ),
             client.V1EnvVar(
                 name="NO_CHECKS",
-                value=os.environ.get("NO_CHECKS"),
+                value=Config.NO_CHECKS,
             ),
             client.V1EnvVar(
                 name="AWS_ACCESS_KEY_ID",
@@ -271,7 +264,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
 
 def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
     processes = []
-    if bool_env_var_set("NO_CHECKS"):
+    if Config.no_checks():
         logging.info("stateless-verifier will run with --no-checks flag")
     for index, mini_batch in enumerate(time_intervals):
         process_name = (

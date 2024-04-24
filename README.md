@@ -61,9 +61,12 @@ These environment variables control the program's runtime:
 
 The Coordinator program runs the `stateless-verification-tool` for validation against submissions. Set the following environment variables for this purpose:
 
-- `WORKER_IMAGE` - Docker image name for the stateless verifier (e.g., `mina-delegation-verify`).
+- `WORKER_IMAGE` - Docker image name for the stateless verifier (e.g., `delegation-verify`).
 - `WORKER_TAG` - Specific tag of the Docker image, indicating the version or build.
 - `NO_CHECKS` - if set to `1`, stateless verifier will run with `--no-checks` flag
+- `AWS_S3_BUCKET` - AWS S3 Bucket (needed for `stateless-verification-tool`)
+- `NETWORK_NAME` - Network name (needed for `stateless-verification-tool`, in case block does not exist in Cassandra 
+                   it attempts to download it from AWS S3 from `AWS_S3_BUCKET`\\`NETWORK_NAME`\blocks)
 
 ### Slack Alerts
 
@@ -121,9 +124,6 @@ To connect to AWS Keyspaces/Cassandra, the following environment variables need 
 **Mandatory/common env vars:**
 - `AWS_KEYSPACE` - Your Keyspace name.
 - `SSL_CERTFILE` - The path to your SSL certificate.
-- `AWS_S3_BUCKET` - AWS S3 Bucket (needed for `stateless-verification-tool`)
-- `NETWORK_NAME` - Network name (needed for `stateless-verification-tool`, in case block does not exist in Cassandra 
-                   it attempts to download it from AWS S3 from `AWS_S3_BUCKET`\\`NETWORK_NAME`\blocks)
 - `CASSANDRA_HOST` - Cassandra host (e.g. cassandra.us-west-2.amazonaws.com).
 - `CASSANDRA_PORT` - Cassandra port (e.g. 9142).
 
