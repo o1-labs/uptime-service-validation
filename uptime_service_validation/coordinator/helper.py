@@ -326,12 +326,12 @@ class DB:
         return 0
 
     def insert_submissions(self, submissions):
-        """Insert a list of Submission objects into the submissions_by_submitter table."""
+        """Insert a list of Submission objects into the submissions table."""
         self.logger.info(
             "insert_submissions  start (submissions: %s)", len(submissions)
         )
         insert_query = """
-            INSERT INTO submissions_by_submitter (
+            INSERT INTO submissions (
                 submitted_at_date, submitted_at, submitter, remote_addr, block_hash, 
                 state_hash, parent, height, slot, validation_error, verified
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
