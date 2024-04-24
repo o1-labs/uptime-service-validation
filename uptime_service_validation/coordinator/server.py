@@ -57,9 +57,6 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
         open("/var/run/secrets/kubernetes.io/serviceaccount/namespace").read().strip()
     )
 
-    platform = os.environ.get("PLATFORM")
-    network_name = os.environ.get("NETWORK_NAME")
-
     service_account_name = f"delegation-verify"
 
     worker_cpu_request = os.environ.get("WORKER_CPU_REQUEST")
@@ -71,7 +68,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
 
     # List to keep track of job names
     jobs = []
-    cassandra_ip = try_get_hostname_ip(os.environ.get("CASSANDRA_HOST"), logging)
+    cassandra_ip = try_get_hostname_ip(Config.CASSANDRA_HOST, logging)
     if Config.no_checks():
         logging.info("stateless-verifier will run with --no-checks flag")
     for index, mini_batch in enumerate(time_intervals):
@@ -87,19 +84,19 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
             ),
             client.V1EnvVar(
                 name="AWS_REGION",
-                value=os.environ.get("AWS_REGION"),
+                value=Config.AWS_REGION,
             ),
             client.V1EnvVar(
                 name="AWS_DEFAULT_REGION",
-                value=os.environ.get("AWS_REGION"),
+                value=Config.AWS_REGION,
             ),
             client.V1EnvVar(
                 name="AWS_S3_BUCKET",
-                value=os.environ.get("AWS_S3_BUCKET"),
+                value=Config.AWS_S3_BUCKET,
             ),
             client.V1EnvVar(
                 name="AWS_KEYSPACE",
-                value=os.environ.get("AWS_KEYSPACE"),
+                value=Config.AWS_KEYSPACE,
             ),
             client.V1EnvVar(
                 name="CASSANDRA_HOST",
@@ -107,15 +104,15 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
             ),
             client.V1EnvVar(
                 name="CASSANDRA_PORT",
-                value=os.environ.get("CASSANDRA_PORT"),
+                value=Config.CASSANDRA_PORT,
             ),
             client.V1EnvVar(
                 name="CASSANDRA_USERNAME",
-                value=os.environ.get("CASSANDRA_USERNAME"),
+                value=Config.CASSANDRA_USERNAME,
             ),
             client.V1EnvVar(
                 name="CASSANDRA_PASSWORD",
-                value=os.environ.get("CASSANDRA_PASSWORD"),
+                value=Config.CASSANDRA_PASSWORD,
             ),
             client.V1EnvVar(
                 name="SSL_CERTFILE",
@@ -127,7 +124,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
             ),
             client.V1EnvVar(
                 name="NETWORK_NAME",
-                value=os.environ.get("NETWORK_NAME"),
+                value=Config.NETWORK_NAME,
             ),
             client.V1EnvVar(
                 name="START_TIMESTAMP",
@@ -143,11 +140,35 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
             ),
             client.V1EnvVar(
                 name="AWS_ACCESS_KEY_ID",
-                value=os.environ.get("AWS_ACCESS_KEY_ID"),
+                value=Config.AWS_ACCESS_KEY_ID,
             ),
             client.V1EnvVar(
                 name="AWS_SECRET_ACCESS_KEY",
-                value=os.environ.get("AWS_SECRET_ACCESS_KEY"),
+                value=Config.AWS_SECRET_ACCESS_KEY,
+            ),
+            client.V1EnvVar(
+                name="SUBMISSION_STORAGE",
+                value=Config.SUBMISSION_STORAGE,
+            ),
+            client.V1EnvVar(
+                name="POSTGRES_HOST",
+                value=Config.POSTGRES_HOST,
+            ),
+            client.V1EnvVar(
+                name="POSTGRES_DB",
+                value=Config.POSTGRES_DB,
+            ),
+            client.V1EnvVar(
+                name="POSTGRES_USER",
+                value=Config.POSTGRES_USER,
+            ),
+            client.V1EnvVar(
+                name="POSTGRES_PASSWORD",
+                value=Config.POSTGRES_PASSWORD,
+            ),
+            client.V1EnvVar(
+                name="POSTGRES_PORT",
+                value=Config.POSTGRES_PORT,
             ),
         ]
 
@@ -297,11 +318,23 @@ def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
             "-e",
             "AWS_S3_BUCKET",
             "-e",
-            "NETWORK_NAME",
+            f"NETWORK_NAME={Config.NETWORK_NAME}",
             "-e",
             "NO_CHECKS",
             "-e",
             "SSL_CERTFILE=/var/ssl/ssl-cert.crt",
+            "-e",
+            f"SUBMISSION_STORAGE={Config.SUBMISSION_STORAGE}",
+            "-e",
+            f"POSTGRES_HOST={Config.POSTGRES_HOST}",
+            "-e",
+            f"POSTGRES_DB={Config.POSTGRES_DB}",
+            "-e",
+            "POSTGRES_USER",
+            "-e",
+            "POSTGRES_PASSWORD",
+            "-e",
+            "POSTGRES_PORT",
             image,
             f"{datetime_formatter(mini_batch[0])}",
             f"{datetime_formatter(mini_batch[1])}",

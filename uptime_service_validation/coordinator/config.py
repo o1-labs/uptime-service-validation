@@ -16,6 +16,9 @@ class Config:
     WORKER_IMAGE = os.environ["WORKER_IMAGE"]
     WORKER_TAG = os.environ["WORKER_TAG"]
     NO_CHECKS = os.environ.get("NO_CHECKS")
+    NETWORK_NAME = os.environ.get("NETWORK_NAME")
+    AWS_S3_BUCKET = os.environ.get("AWS_S3_BUCKET")
+    AWS_REGION = os.environ.get("AWS_REGION")
 
     # Slack Alerts
     WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
