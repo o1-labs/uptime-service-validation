@@ -98,6 +98,7 @@ CREATE TABLE IF NOT EXISTS submissions (
     validation_error TEXT,
     verified BOOLEAN
 );
+CREATE UNIQUE INDEX IF NOT EXISTS uq_submissions_submitter_date ON submissions USING btree (submitter, submitted_at);
 
 -- Additional indexes for better query performance
 CREATE INDEX idx_submissions_submitter_date ON submissions (submitter, submitted_at_date);
