@@ -296,6 +296,8 @@ def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
         command = [
             "docker",
             "run",
+            "--network",
+            "host",
             "--rm",
             "-v",
             f"{os.environ.get('SSL_CERTFILE')}:/var/ssl/ssl-cert.crt",

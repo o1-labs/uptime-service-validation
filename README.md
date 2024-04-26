@@ -56,6 +56,7 @@ These environment variables control the program's runtime:
 - `MINI_BATCH_NUMBER` - Number of mini-batches to process within each main batch. Used by `getTimeBatches` to divide the time between `prev_batch_end` and `cur_batch_end` into smaller intervals.
 - `UPTIME_DAYS_FOR_SCORE` - Number of days the system must be operational to calculate a score. Used by `updateScoreboard` to define the scoreboard update period.
 - `RETRY_COUNT` - Number of times a batch should be retried before giving up.
+- `SUBMISSION_STORAGE` - Storage where submissions are kept. Valid options: `POSTGRES` or `CASSANDRA`. Default: `POSTGRES`.
 
 ### Stateless Verification Tool Configuration
 
