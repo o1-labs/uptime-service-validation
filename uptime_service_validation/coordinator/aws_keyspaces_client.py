@@ -159,7 +159,23 @@ class AWSKeyspacesClient:
                 "You have to provide either both submitted_at_start and submitted_at_end or neither"
             )
 
-        base_query = f"SELECT submitted_at_date, submitted_at, submitter, created_at, block_hash, remote_addr, peer_id, snark_work, graphql_control_port, built_with_commit_sha, state_hash, parent, height, slot, validation_error, verified FROM {self.aws_keyspace}.submissions"
+        base_query = f"""SELECT 
+                        submitted_at_date, 
+                        submitted_at, 
+                        submitter, 
+                        created_at, 
+                        block_hash, 
+                        remote_addr, 
+                        peer_id, 
+                        graphql_control_port, 
+                        built_with_commit_sha, 
+                        state_hash, 
+                        parent, 
+                        height, 
+                        slot, 
+                        validation_error, 
+                        verified 
+                       FROM {self.aws_keyspace}.submissions"""
 
         # For storing conditions and corresponding parameters
         conditions = []
@@ -226,7 +242,6 @@ class AWSKeyspacesClient:
                 block_hash=row.block_hash,
                 remote_addr=row.remote_addr,
                 peer_id=row.peer_id,
-                snark_work=row.snark_work,
                 graphql_control_port=row.graphql_control_port,
                 built_with_commit_sha=row.built_with_commit_sha,
                 state_hash=row.state_hash,
