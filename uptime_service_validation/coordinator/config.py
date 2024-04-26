@@ -26,8 +26,10 @@ class Config:
     ALARM_ZK_UPPER_LIMIT_SEC = os.environ.get("ALARM_ZK_UPPER_LIMIT_SEC")
 
     # Submission Storage
-    VALID_STORAGE_OPTIONS = ["CASSANDRA", "POSTGRES"]
-    SUBMISSION_STORAGE = os.getenv("SUBMISSION_STORAGE", "POSTGRES").upper()
+    STORAGE_CASSANDRA = "CASSANDRA"
+    STORAGE_POSTGRES = "POSTGRES"
+    VALID_STORAGE_OPTIONS = [STORAGE_CASSANDRA, STORAGE_POSTGRES]
+    SUBMISSION_STORAGE = os.getenv("SUBMISSION_STORAGE", STORAGE_POSTGRES).upper()
 
     # Postgres
     POSTGRES_HOST = os.environ["POSTGRES_HOST"]
@@ -55,7 +57,9 @@ class Config:
     # Application status
     IGNORE_APPLICATION_STATUS = os.environ.get("IGNORE_APPLICATION_STATUS")
     SPREADSHEET_NAME = str(os.environ.get("SPREADSHEET_NAME")).strip()
-    SPREADSHEET_ID = str(os.environ.get("SPREADSHEET_ID")).strip()
+    SPREADSHEET_CREDENTIALS_JSON = str(
+        os.environ.get("SPREADSHEET_CREDENTIALS_JSON")
+    ).strip()
     SPREADSHEET_SCOPE = [
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive",
