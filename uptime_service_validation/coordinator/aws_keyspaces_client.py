@@ -1,4 +1,3 @@
-import os
 import boto3
 import time
 import random
@@ -8,39 +7,13 @@ from cassandra.cluster import Cluster, ExecutionProfile, EXEC_PROFILE_DEFAULT
 from cassandra_sigv4.auth import SigV4AuthProvider
 from cassandra.policies import DCAwareRoundRobinPolicy, RetryPolicy
 from ssl import SSLContext, CERT_REQUIRED, PROTOCOL_TLS_CLIENT
-from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Optional, ByteString, List
+from typing import Optional, List
 
 import pandas as pd
 
 from uptime_service_validation.coordinator.config import Config
-
-
-@dataclass
-class Submission:
-    submitted_at_date: str
-    submitted_at: datetime
-    submitter: str
-    created_at: datetime
-    block_hash: str
-    remote_addr: str
-    peer_id: str
-    snark_work: ByteString
-    graphql_control_port: int
-    built_with_commit_sha: str
-    state_hash: Optional[str] = None
-    parent: Optional[str] = None
-    height: Optional[int] = None
-    slot: Optional[int] = None
-    validation_error: Optional[str] = None
-    verified: Optional[bool] = None
-
-
-@dataclass
-class Block:
-    block_hash: str
-    raw_block: ByteString
+from uptime_service_validation.coordinator.helper import Submission
 
 
 class AWSKeyspacesClient:
@@ -151,28 +124,6 @@ class AWSKeyspacesClient:
             return self.session.execute(query, parameters)
         else:
             return self.session.execute(query)
-
-    def get_blocks(
-        self, limit: Optional[int] = None, block_hash: Optional[str] = None
-    ) -> List[Block]:
-        base_query = f"SELECT block_hash, raw_block FROM {self.aws_keyspace}.blocks"
-
-        if block_hash:
-            # Fetch block by specific hash
-            query = f"{base_query} WHERE block_hash = %s"
-            results = self.execute_query(query, (block_hash,))
-        elif limit is not None:
-            # Fetch a limited number of blocks
-            query = f"{base_query} LIMIT {limit}"
-            results = self.execute_query(query)
-        else:
-            # Fetch all blocks
-            results = self.execute_query(base_query)
-
-        blocks = [
-            Block(block_hash=row.block_hash, raw_block=row.raw_block) for row in results
-        ]
-        return blocks
 
     # get list of submitted_at_date in the form of [YYYY-MM-DD]
     # submitted_at_date is needed, along with start_date and end_date, as input to get list of submissions from Cassandra AWS Keyspace

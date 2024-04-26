@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import os
+from typing import ByteString, Optional
 import matplotlib.pyplot as plt
 import networkx as nx
 import pandas as pd
@@ -17,6 +18,28 @@ import gspread
 from uptime_service_validation.coordinator.config import Config
 
 ERROR = "Error: {0}"
+
+
+@dataclass
+class Submission:
+    "Represents a submission to the network."
+
+    submitted_at_date: str
+    submitted_at: datetime
+    submitter: str
+    created_at: datetime
+    block_hash: str
+    remote_addr: str
+    peer_id: str
+    snark_work: ByteString
+    graphql_control_port: int
+    built_with_commit_sha: str
+    state_hash: Optional[str] = None
+    parent: Optional[str] = None
+    height: Optional[int] = None
+    slot: Optional[int] = None
+    validation_error: Optional[str] = None
+    verified: Optional[bool] = None
 
 
 class Timer:
