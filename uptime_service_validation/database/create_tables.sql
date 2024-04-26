@@ -101,8 +101,8 @@ CREATE TABLE IF NOT EXISTS submissions (
 CREATE UNIQUE INDEX IF NOT EXISTS uq_submissions_submitter_date ON submissions USING btree (submitter, submitted_at);
 
 -- Additional indexes for better query performance
-CREATE INDEX idx_submissions_submitter_date ON submissions (submitter, submitted_at_date);
-CREATE INDEX idx_submissions_submitter_datetime ON submissions (submitter, submitted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_submissions_submitter_date ON submissions (submitter, submitted_at_date);
+CREATE INDEX IF NOT EXISTS idx_submissions_submitter_datetime ON submissions (submitter, submitted_at DESC);
 
 -- Table creation for points_summary
 -- The points_summary table aggregates data related to node scoring.
