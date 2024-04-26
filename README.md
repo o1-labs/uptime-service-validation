@@ -66,7 +66,7 @@ The Coordinator program runs the `stateless-verification-tool` for validation ag
 - `WORKER_TAG` - Specific tag of the Docker image, indicating the version or build.
 - `NO_CHECKS` - if set to `1`, stateless verifier will run with `--no-checks` flag
 - `AWS_S3_BUCKET` - AWS S3 Bucket (needed for `stateless-verification-tool`)
-- `NETWORK_NAME` - Network name (needed for `stateless-verification-tool`, in case block does not exist in Cassandra 
+- `NETWORK_NAME` - Network name (needed for `stateless-verification-tool`, in case block does not exist in `SUBMISSION_STORAGE` 
                    it attempts to download it from AWS S3 from `AWS_S3_BUCKET`\\`NETWORK_NAME`\blocks)
 
 ### Slack Alerts
