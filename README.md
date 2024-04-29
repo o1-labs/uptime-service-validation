@@ -52,18 +52,22 @@ The program requires setting several environment variables for operation and set
 
 These environment variables control the program's runtime:
 
-- `SURVEY_INTERVAL_MINUTES` - Interval in minutes between processing data batches. Determines the end time (`cur_batch_end`) of the current batch by adding this interval to `prev_batch_end`.
-- `MINI_BATCH_NUMBER` - Number of mini-batches to process within each main batch. Used by `getTimeBatches` to divide the time between `prev_batch_end` and `cur_batch_end` into smaller intervals.
-- `UPTIME_DAYS_FOR_SCORE` - Number of days the system must be operational to calculate a score. Used by `updateScoreboard` to define the scoreboard update period.
-- `RETRY_COUNT` - Number of times a batch should be retried before giving up.
+- `SURVEY_INTERVAL_MINUTES` - Interval in minutes between processing data batches. Determines the end time (`cur_batch_end`) of the current batch by adding this interval to `prev_batch_end`. Default: `20`.
+- `MINI_BATCH_NUMBER` - Number of mini-batches to process within each main batch. Used by `getTimeBatches` to divide the time between `prev_batch_end` and `cur_batch_end` into smaller intervals. Default: `5`.
+- `UPTIME_DAYS_FOR_SCORE` - Number of days the system must be operational to calculate a score. Used by `updateScoreboard` to define the scoreboard update period. Default `90`.
+- `RETRY_COUNT` - Number of times a batch should be retried before giving up. Default: `3`.
+- `SUBMISSION_STORAGE` - Storage where submissions are kept. Valid options: `POSTGRES` or `CASSANDRA`. Default: `POSTGRES`.
 
 ### Stateless Verification Tool Configuration
 
 The Coordinator program runs the `stateless-verification-tool` for validation against submissions. Set the following environment variables for this purpose:
 
-- `WORKER_IMAGE` - Docker image name for the stateless verifier (e.g., `mina-delegation-verify`).
+- `WORKER_IMAGE` - Docker image name for the stateless verifier (e.g., `delegation-verify`).
 - `WORKER_TAG` - Specific tag of the Docker image, indicating the version or build.
 - `NO_CHECKS` - if set to `1`, stateless verifier will run with `--no-checks` flag
+- `AWS_S3_BUCKET` - AWS S3 Bucket (needed for `stateless-verification-tool`)
+- `NETWORK_NAME` - Network name (needed for `stateless-verification-tool`, in case block does not exist in `SUBMISSION_STORAGE` 
+                   it attempts to download it from AWS S3 from `AWS_S3_BUCKET`\\`NETWORK_NAME`\blocks)
 
 ### Slack Alerts
 
@@ -121,9 +125,6 @@ To connect to AWS Keyspaces/Cassandra, the following environment variables need 
 **Mandatory/common env vars:**
 - `AWS_KEYSPACE` - Your Keyspace name.
 - `SSL_CERTFILE` - The path to your SSL certificate.
-- `AWS_S3_BUCKET` - AWS S3 Bucket (needed for `stateless-verification-tool`)
-- `NETWORK_NAME` - Network name (needed for `stateless-verification-tool`, in case block does not exist in Cassandra 
-                   it attempts to download it from AWS S3 from `AWS_S3_BUCKET`\\`NETWORK_NAME`\blocks)
 - `CASSANDRA_HOST` - Cassandra host (e.g. cassandra.us-west-2.amazonaws.com).
 - `CASSANDRA_PORT` - Cassandra port (e.g. 9142).
 

@@ -13,6 +13,7 @@ from time import sleep
 from dotenv import load_dotenv
 import pandas as pd
 import psycopg2
+from uptime_service_validation.coordinator.config import Config
 from uptime_service_validation.coordinator.helper import (
     DB,
     Timer,
@@ -26,7 +27,6 @@ from uptime_service_validation.coordinator.helper import (
     get_contact_details_from_spreadsheet,
 )
 from uptime_service_validation.coordinator.server import (
-    bool_env_var_set,
     setUpValidatorPods,
     setUpValidatorProcesses,
 )
@@ -48,8 +48,8 @@ class State:
     def __init__(self, batch):
         self.batch = batch
         self.current_timestamp = datetime.now(timezone.utc)
-        self.retrials_left = int(os.environ["RETRY_COUNT"])
-        self.interval = int(os.environ["SURVEY_INTERVAL_MINUTES"])
+        self.retrials_left = Config.RETRY_COUNT
+        self.interval = Config.SURVEY_INTERVAL_MINUTES
         self.loop_count = 0
         self.stop = False
 
@@ -71,7 +71,7 @@ class State:
     def advance_to_next_batch(self, next_bot_log_id):
         """Update the state so that it describes the next batch in line;
         transitioning the state to the next loop pass."""
-        self.retrials_left = int(os.environ["RETRY_COUNT"])
+        self.retrials_left = Config.RETRY_COUNT
         self.batch = self.batch.next(next_bot_log_id)
         self.__warn_if_work_took_longer_then_expected()
         self.__next_loop()
@@ -81,7 +81,7 @@ class State:
         logging.error(
             "Error in processing, retrying the batch... Retrials left: %s out of %s.",
             self.retrials_left,
-            os.environ["RETRY_COUNT"],
+            Config.RETRY_COUNT,
         )
         if self.retrials_left > 0:
             self.retrials_left -= 1
@@ -110,32 +110,47 @@ class State:
             )
 
 
-def load_submissions(time_intervals):
+def load_submissions(time_intervals, db, submission_storage=Config.SUBMISSION_STORAGE):
     """
-    Load submissions from Cassandra:
+    Load submissions from Config.SUBMISSION_STORAGE:
      - return validated subs as a DataFrame for further processing.
      - return all subs for storing in the submissions_by_submitter table.
     """
     submissions = []
     submissions_verified = []
-    cassandra = AWSKeyspacesClient()
 
-    try:
-        cassandra.connect()
-        for time_interval in time_intervals:
-            submissions.extend(
-                cassandra.get_submissions(
-                    submitted_at_start=time_interval[0],
-                    submitted_at_end=time_interval[1],
-                    start_inclusive=True,
-                    end_inclusive=False,
+    if submission_storage == Config.STORAGE_CASSANDRA:
+        cassandra = AWSKeyspacesClient()
+        try:
+            cassandra.connect()
+            for time_interval in time_intervals:
+                submissions.extend(
+                    cassandra.get_submissions(
+                        submitted_at_start=time_interval[0],
+                        submitted_at_end=time_interval[1],
+                        start_inclusive=True,
+                        end_inclusive=False,
+                    )
                 )
-            )
-    except Exception as e:
-        logging.error("Error in loading submissions: %s", e)
-        return pd.DataFrame([])
-    finally:
-        cassandra.close()
+        except Exception as e:
+            logging.error("Error in loading submissions: %s", e)
+            return [pd.DataFrame([]), submissions]
+        finally:
+            cassandra.close()
+    elif submission_storage == Config.STORAGE_POSTGRES:
+        start_date = time_intervals[0][0]
+        end_date = time_intervals[-1][1]
+        try:
+            submissions_result = db.get_submissions(start_date, end_date)
+            if submissions_result is None:
+                logging.error("Failed to load submissions from database.")
+                return [pd.DataFrame([]), submissions]
+            submissions.extend(submissions_result)
+        except Exception as e:
+            logging.error("Error in loading submissions: %s", e)
+            return [pd.DataFrame([]), submissions]
+    else:
+        raise ValueError(f"Invalid submission storage: {submission_storage}")
 
     # for further processing
     # we use only submissions verified = True and validation_error = None or ""
@@ -316,18 +331,20 @@ def process(db, state):
 
     # sleep until batch ends, update the state accordingly, then continue.
     state.wait_until_batch_ends()
-    time_intervals = list(state.batch.split(int(os.environ["MINI_BATCH_NUMBER"])))
+    time_intervals = list(state.batch.split(Config.MINI_BATCH_NUMBER))
 
-    worker_image = os.environ["WORKER_IMAGE"]
-    worker_tag = os.environ["WORKER_TAG"]
     timer = Timer()
-    if bool_env_var_set("TEST_ENV"):
+    if Config.is_test_environment():
         logging.info("running in test environment")
         with timer.measure():
-            setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag)
+            setUpValidatorProcesses(
+                time_intervals, logging, Config.WORKER_IMAGE, Config.WORKER_TAG
+            )
     else:
         with timer.measure():
-            setUpValidatorPods(time_intervals, logging, worker_image, worker_tag)
+            setUpValidatorPods(
+                time_intervals, logging, Config.WORKER_IMAGE, Config.WORKER_TAG
+            )
 
     logging.info(
         "reading ZKValidator results from a db between the time range: %s - %s",
@@ -336,22 +353,24 @@ def process(db, state):
     )
 
     logging.info("ZKValidator results read from a db in %s.", timer.duration)
-    webhook_url = os.environ.get("WEBHOOK_URL")
+    webhook_url = Config.WEBHOOK_URL
     if webhook_url is not None:
-        if timer.duration < float(os.environ["ALARM_ZK_LOWER_LIMIT_SEC"]):
+        if timer.duration < float(Config.ALARM_ZK_LOWER_LIMIT_SEC):
             send_slack_message(
                 webhook_url,
                 f"ZkApp Validation took {timer.duration} seconds, which is too quick",
                 logging,
             )
-        if timer.duration > float(os.environ["ALARM_ZK_UPPER_LIMIT_SEC"]):
+        if timer.duration > float(Config.ALARM_ZK_UPPER_LIMIT_SEC):
             send_slack_message(
                 webhook_url,
                 f"ZkApp Validation took {timer.duration}, which is too long",
                 logging,
             )
 
-    state_hash_df, all_submissions = load_submissions(time_intervals)
+    state_hash_df, all_submissions = load_submissions(
+        time_intervals, db, Config.SUBMISSION_STORAGE
+    )
     if not state_hash_df.empty:
         try:
             bot_log_id = process_statehash_df(
@@ -370,9 +389,11 @@ def process(db, state):
     try:
         db.update_scoreboard(
             state.batch.end_time,
-            int(os.environ["UPTIME_DAYS_FOR_SCORE"]),
+            Config.UPTIME_DAYS_FOR_SCORE,
         )
-        db.insert_submissions(all_submissions)
+        # we only copy submissions to Postgres if we're using Cassandra as the primary storage
+        if Config.SUBMISSION_STORAGE == Config.STORAGE_CASSANDRA:
+            db.insert_submissions(all_submissions)
     except Exception as error:
         db.connection.rollback()
         logging.error("ERROR: %s", error)
@@ -391,20 +412,27 @@ def main():
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
+    if Config.SUBMISSION_STORAGE not in Config.VALID_STORAGE_OPTIONS:
+        raise ValueError(
+            f"Invalid storage option: {Config.SUBMISSION_STORAGE}. Valid options are {Config.VALID_STORAGE_OPTIONS}"
+        )
+    else:
+        logging.info("Using SUBMISSION_STORAGE: %s", Config.SUBMISSION_STORAGE)
+
     connection = psycopg2.connect(
-        host=os.environ["POSTGRES_HOST"],
-        port=os.environ["POSTGRES_PORT"],
-        database=os.environ["POSTGRES_DB"],
-        user=os.environ["POSTGRES_USER"],
-        password=os.environ["POSTGRES_PASSWORD"],
+        host=Config.POSTGRES_HOST,
+        port=Config.POSTGRES_PORT,
+        database=Config.POSTGRES_DB,
+        user=Config.POSTGRES_USER,
+        password=Config.POSTGRES_PASSWORD,
     )
 
-    interval = int(os.environ["SURVEY_INTERVAL_MINUTES"])
+    interval = Config.SURVEY_INTERVAL_MINUTES
     db = DB(connection, logging)
     batch = db.get_batch_timings(timedelta(minutes=interval))
     state = State(batch)
     while not state.stop:
-        if os.environ.get("IGNORE_APPLICATION_STATUS") == "1":
+        if Config.ignore_application_status():
             logging.info("Ignoring application status update.")
         else:
             try:

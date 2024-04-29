@@ -1,10 +1,8 @@
 import logging
 import os
 import sys
-from uptime_service_validation.coordinator.server import (
-    bool_env_var_set,
-    try_get_hostname_ip,
-)
+from uptime_service_validation.coordinator.server import try_get_hostname_ip
+from uptime_service_validation.coordinator.config import bool_env_var_set
 
 
 def test_try_get_hostname_ip():

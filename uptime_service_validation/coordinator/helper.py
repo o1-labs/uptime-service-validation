@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import os
+from typing import ByteString, Optional, List
 import matplotlib.pyplot as plt
 import networkx as nx
 import pandas as pd
@@ -14,7 +15,31 @@ import requests
 from oauth2client.service_account import ServiceAccountCredentials
 import gspread
 
+from uptime_service_validation.coordinator.config import Config
+
 ERROR = "Error: {0}"
+
+
+@dataclass
+class Submission:
+    "Represents a submission to the network."
+
+    submitted_at_date: str
+    submitted_at: datetime
+    submitter: str
+    created_at: datetime
+    block_hash: str
+    remote_addr: str
+    peer_id: str
+    graphql_control_port: int
+    built_with_commit_sha: str
+    snark_work: Optional[ByteString] = None
+    state_hash: Optional[str] = None
+    parent: Optional[str] = None
+    height: Optional[int] = None
+    slot: Optional[int] = None
+    validation_error: Optional[str] = None
+    verified: Optional[bool] = None
 
 
 class Timer:
@@ -326,12 +351,12 @@ class DB:
         return 0
 
     def insert_submissions(self, submissions):
-        """Insert a list of Submission objects into the submissions_by_submitter table."""
+        """Insert a list of Submission objects into the submissions table."""
         self.logger.info(
             "insert_submissions  start (submissions: %s)", len(submissions)
         )
         insert_query = """
-            INSERT INTO submissions_by_submitter (
+            INSERT INTO submissions (
                 submitted_at_date, submitted_at, submitter, remote_addr, block_hash, 
                 state_hash, parent, height, slot, validation_error, verified
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -365,18 +390,76 @@ class DB:
         self.logger.info("insert_submissions  end")
         return 0
 
+    # return list of Submission objects
+    def get_submissions(
+        self, start_date: datetime, end_date: datetime
+    ) -> Optional[List[Submission]]:
+        "Get the submissions for a given submitter and time frame."
+        query = """
+            SET TIME ZONE 'UTC';
+            SELECT 
+                submitted_at_date, 
+                submitted_at, 
+                submitter, 
+                created_at, 
+                block_hash, 
+                remote_addr, 
+                peer_id, 
+                graphql_control_port, 
+                built_with_commit_sha, 
+                state_hash, 
+                parent, 
+                height, 
+                slot, 
+                validation_error, 
+                verified 
+            FROM submissions 
+            WHERE submitted_at >= %s 
+            AND submitted_at < %s
+            ORDER BY submitted_at DESC;
+        """
+
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute(query, (start_date, end_date))
+
+            # print query with parameters
+            # preview_query = cursor.mogrify(query, (start_date, end_date))
+            # print(preview_query.decode("utf-8"))
+            result = cursor.fetchall()
+            # convert the result to a list of Submission objects
+            submissions = [
+                Submission(
+                    submitted_at_date=row[0],
+                    submitted_at=row[1],
+                    submitter=row[2],
+                    created_at=row[3],
+                    block_hash=row[4],
+                    remote_addr=row[5],
+                    peer_id=row[6],
+                    graphql_control_port=row[7],
+                    built_with_commit_sha=row[8],
+                    state_hash=row[9],
+                    parent=row[10],
+                    height=row[11],
+                    slot=row[12],
+                    validation_error=row[13],
+                    verified=row[14],
+                )
+                for row in result
+            ]
+            return submissions
+        except psycopg2.Error as e:
+            self.logger.error("Database error: %s", e)
+            return None
+
 
 def get_contact_details_from_spreadsheet():
     "Get the contact details of the block producers from the Google spreadsheet."
     os.environ["PYTHONIOENCODING"] = "utf-8"
-    spreadsheet_scope = [
-        "https://spreadsheets.google.com/feeds",
-        "https://www.googleapis.com/auth/drive",
-    ]
-    spreadsheet_name = str(os.environ["SPREADSHEET_NAME"]).strip()
-    spreadsheet_credentials_json = str(
-        os.environ["SPREADSHEET_CREDENTIALS_JSON"]
-    ).strip()
+    spreadsheet_scope = Config.SPREADSHEET_SCOPE
+    spreadsheet_name = Config.SPREADSHEET_NAME
+    spreadsheet_credentials_json = Config.SPREADSHEET_CREDENTIALS_JSON
     creds = ServiceAccountCredentials.from_json_keyfile_name(
         spreadsheet_credentials_json, spreadsheet_scope
     )
