@@ -339,6 +339,8 @@ def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
             "POSTGRES_PASSWORD",
             "-e",
             "POSTGRES_PORT",
+            "-e",
+            "POSTGRES_SSLMODE",
             image,
             f"{datetime_formatter(mini_batch[0])}",
             f"{datetime_formatter(mini_batch[1])}",

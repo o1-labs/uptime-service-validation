@@ -7,14 +7,14 @@ class Config:
     """
 
     # Runtime
-    RETRY_COUNT = int(os.environ["RETRY_COUNT"])
-    SURVEY_INTERVAL_MINUTES = int(os.environ["SURVEY_INTERVAL_MINUTES"])
-    MINI_BATCH_NUMBER = int(os.environ["MINI_BATCH_NUMBER"])
-    UPTIME_DAYS_FOR_SCORE = int(os.environ["UPTIME_DAYS_FOR_SCORE"])
+    RETRY_COUNT = int(os.environ.get("RETRY_COUNT", "3"))
+    SURVEY_INTERVAL_MINUTES = int(os.environ.get("SURVEY_INTERVAL_MINUTES", "20"))
+    MINI_BATCH_NUMBER = int(os.environ.get("MINI_BATCH_NUMBER", "5"))
+    UPTIME_DAYS_FOR_SCORE = int(os.environ.get("UPTIME_DAYS_FOR_SCORE", "90"))
 
     # Stateless Verifier
-    WORKER_IMAGE = os.environ["WORKER_IMAGE"]
-    WORKER_TAG = os.environ["WORKER_TAG"]
+    WORKER_IMAGE = os.environ.get("WORKER_IMAGE")
+    WORKER_TAG = os.environ.get("WORKER_TAG")
     NO_CHECKS = os.environ.get("NO_CHECKS")
     NETWORK_NAME = os.environ.get("NETWORK_NAME")
     AWS_S3_BUCKET = os.environ.get("AWS_S3_BUCKET")

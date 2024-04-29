@@ -52,10 +52,10 @@ The program requires setting several environment variables for operation and set
 
 These environment variables control the program's runtime:
 
-- `SURVEY_INTERVAL_MINUTES` - Interval in minutes between processing data batches. Determines the end time (`cur_batch_end`) of the current batch by adding this interval to `prev_batch_end`.
-- `MINI_BATCH_NUMBER` - Number of mini-batches to process within each main batch. Used by `getTimeBatches` to divide the time between `prev_batch_end` and `cur_batch_end` into smaller intervals.
-- `UPTIME_DAYS_FOR_SCORE` - Number of days the system must be operational to calculate a score. Used by `updateScoreboard` to define the scoreboard update period.
-- `RETRY_COUNT` - Number of times a batch should be retried before giving up.
+- `SURVEY_INTERVAL_MINUTES` - Interval in minutes between processing data batches. Determines the end time (`cur_batch_end`) of the current batch by adding this interval to `prev_batch_end`. Default: `20`.
+- `MINI_BATCH_NUMBER` - Number of mini-batches to process within each main batch. Used by `getTimeBatches` to divide the time between `prev_batch_end` and `cur_batch_end` into smaller intervals. Default: `5`.
+- `UPTIME_DAYS_FOR_SCORE` - Number of days the system must be operational to calculate a score. Used by `updateScoreboard` to define the scoreboard update period. Default `90`.
+- `RETRY_COUNT` - Number of times a batch should be retried before giving up. Default: `3`.
 - `SUBMISSION_STORAGE` - Storage where submissions are kept. Valid options: `POSTGRES` or `CASSANDRA`. Default: `POSTGRES`.
 
 ### Stateless Verification Tool Configuration
