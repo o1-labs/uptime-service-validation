@@ -320,6 +320,8 @@ def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
             "-e",
             "AWS_S3_BUCKET",
             "-e",
+            "AWS_REGION",
+            "-e",
             f"NETWORK_NAME={Config.NETWORK_NAME}",
             "-e",
             "NO_CHECKS",
