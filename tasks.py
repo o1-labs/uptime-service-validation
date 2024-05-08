@@ -86,7 +86,7 @@ def init_database(ctx, batch_end_epoch=None, mins_ago=None, override_empty=False
 
     if should_insert:
         processing_time = 0
-        files_processed = 0
+        files_processed = -1  # -1 indicates that this is initialization
         file_timestamps = datetime.fromtimestamp(batch_end_epoch, timezone.utc)
         batch_start_epoch = batch_end_epoch
 
