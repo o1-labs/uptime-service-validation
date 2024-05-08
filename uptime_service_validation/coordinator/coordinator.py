@@ -383,8 +383,16 @@ def process(db, state):
             state.retry_batch()
             return
     else:
-        # new bot log id hasn't been created, so proceed with the old one
-        bot_log_id = state.batch.bot_log_id
+        # process_statehash_df not processed so new bot log id hasn't been created,
+        # creating a new bot log id entry with 0 submissions processed
+        values = (
+            0,  # submissions processed
+            state.batch.end_time,
+            state.batch.start_time.timestamp(),
+            state.batch.end_time.timestamp(),
+            timer.duration.total_seconds(),
+        )
+        bot_log_id = db.create_bot_log(values)
         logging.info("Finished processing data from table.")
     try:
         db.update_scoreboard(
