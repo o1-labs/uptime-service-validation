@@ -279,7 +279,7 @@ class DB:
               , b_logs as(
                 select (count(1) ) as surveys
                 from bot_logs b , epochs e
-                where b.batch_start_epoch >= start_epoch and  b.batch_end_epoch <= end_epoch and b.files_processed > 0
+                where b.batch_start_epoch >= start_epoch and  b.batch_end_epoch <= end_epoch and b.files_processed > -1
               )
               , scores as (
                 select p.node_id, count(p.bot_log_id) bp_points
