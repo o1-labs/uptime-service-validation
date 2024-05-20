@@ -105,8 +105,11 @@ Create a database and relevant tables before first-time program execution using 
    # Initialize with current timestamp
    invoke init-database
 
-   # Initialize with a specific timestamp
+   # Initialize with a specific unix timestamp
    invoke init-database --batch-end-epoch <timestamp>
+
+   # Initialize with a specific date
+   invoke init-database --batch-end-epoch "2024-06-05 00:00:00"
 
    # Initialize with a timestamp from n minutes ago
    invoke init-database --mins-ago 20
