@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import re
 from invoke import task
 import os
 import psycopg2
@@ -75,7 +76,15 @@ def init_database(ctx, batch_end_epoch=None, mins_ago=None, override_empty=False
     elif batch_end_epoch is None:
         batch_end_epoch = datetime.now(timezone.utc).timestamp()
     else:
-        batch_end_epoch = int(batch_end_epoch)
+        datetime_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}.\d{2}:\d{2}:\d{2}.*$")
+        # Convert batch_end_epoch to a timestamp in utc if it is a datetime string
+        # use regex to check if it is of format 'YYYY-MM-DD HH:MM:SS'
+        if datetime_pattern.match(batch_end_epoch):
+            batch_end_epoch = datetime.fromisoformat(batch_end_epoch).timestamp()
+            print(f"Converted datetime string to timestamp: {batch_end_epoch}")
+        else:
+            batch_end_epoch = int(batch_end_epoch)
+            print(f"Using provided timestamp: {batch_end_epoch}")
 
     # Check if the table is empty, if override_empty is False
     should_insert = True
