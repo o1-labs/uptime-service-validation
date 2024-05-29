@@ -148,3 +148,88 @@ CREATE OR REPLACE TRIGGER trg_after_insert_points
 AFTER INSERT ON points
 FOR EACH ROW
 EXECUTE FUNCTION fn_update_point_summary();
+
+-- Function to clean up old data
+CREATE OR REPLACE FUNCTION cleanup_old_data(days_ago INTEGER) 
+RETURNS void AS $$
+DECLARE 
+  threshold_epoch BIGINT;
+  threshold_date DATE;
+  points_summary_deleted INT;
+  points_deleted INT;
+  bot_logs_statehash_deleted INT;
+  bot_logs_deleted INT;
+  submissions_deleted INT;
+  statehash_deleted INT;
+BEGIN
+  -- Calculate the threshold based on the input parameter
+  SELECT EXTRACT(EPOCH FROM (NOW() - INTERVAL '1 day' * days_ago))::BIGINT INTO threshold_epoch;
+  SELECT (NOW() - INTERVAL '1 day' * days_ago)::DATE INTO threshold_date;
+  RAISE NOTICE 'Cleaning up data older than % days ago', days_ago;
+  RAISE NOTICE 'Threshold epoch: %', threshold_epoch;
+  RAISE NOTICE 'Threshold date: %', threshold_date;
+
+  -- Delete from points_summary and count rows deleted
+  WITH del AS (
+    DELETE FROM points_summary
+    WHERE bot_log_id IN (SELECT id FROM bot_logs WHERE batch_start_epoch < threshold_epoch)
+    RETURNING 1
+  )
+  SELECT COUNT(*) INTO points_summary_deleted FROM del;
+  RAISE NOTICE 'Deleted % rows from points_summary', points_summary_deleted;
+
+  -- Delete from points and count rows deleted
+  WITH del AS (
+    DELETE FROM points
+    WHERE bot_log_id IN (SELECT id FROM bot_logs WHERE batch_start_epoch < threshold_epoch)
+    RETURNING 1
+  )
+  SELECT COUNT(*) INTO points_deleted FROM del;
+  RAISE NOTICE 'Deleted % rows from points', points_deleted;
+
+  -- Delete from bot_logs_statehash and count rows deleted
+  WITH del AS (
+    DELETE FROM bot_logs_statehash
+    WHERE bot_log_id IN (SELECT id FROM bot_logs WHERE batch_start_epoch < threshold_epoch)
+    RETURNING 1
+  )
+  SELECT COUNT(*) INTO bot_logs_statehash_deleted FROM del;
+  RAISE NOTICE 'Deleted % rows from bot_logs_statehash', bot_logs_statehash_deleted;
+
+  -- Delete from bot_logs and count rows deleted
+  WITH del AS (
+    DELETE FROM bot_logs
+    WHERE batch_start_epoch < threshold_epoch
+    RETURNING 1
+  )
+  SELECT COUNT(*) INTO bot_logs_deleted FROM del;
+  RAISE NOTICE 'Deleted % rows from bot_logs', bot_logs_deleted;
+
+  -- Delete from submissions and count rows deleted
+  WITH del AS (
+    DELETE FROM submissions
+    WHERE submitted_at_date < threshold_date
+    RETURNING 1
+  )
+  SELECT COUNT(*) INTO submissions_deleted FROM del;
+  RAISE NOTICE 'Deleted % rows from submissions', submissions_deleted;
+
+  -- Clean up statehash and count rows deleted
+  WITH del AS (
+    DELETE FROM statehash
+    WHERE id NOT IN (SELECT DISTINCT statehash_id FROM bot_logs_statehash)
+      AND id NOT IN (SELECT DISTINCT parent_statehash_id FROM bot_logs_statehash)
+      AND id NOT IN (SELECT DISTINCT statehash_id FROM points)
+    RETURNING 1
+  )
+  SELECT COUNT(*) INTO statehash_deleted FROM del;
+  RAISE NOTICE 'Deleted % rows from statehash', statehash_deleted;
+
+  -- Log the cleanup summary
+  RAISE NOTICE 'Cleanup summary: % points_summary, % points, % bot_logs_statehash, % bot_logs, % submissions, % statehash',
+    points_summary_deleted, points_deleted, bot_logs_statehash_deleted, bot_logs_deleted, submissions_deleted, statehash_deleted;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Example call to the function with 100 days
+-- SELECT cleanup_old_data(100);

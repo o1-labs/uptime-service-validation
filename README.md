@@ -205,3 +205,16 @@ docker run -e SURVEY_INTERVAL_MINUTES \
            -e SSL_CERTFILE \
            uptime-service-validation
 ```
+
+## Maintenance
+
+### Database Cleanup
+
+The system's database can grow over time, but typically, keeping more than 90 days of data isn't necessary. However, you might choose to retain data for a longer period. The schema includes a function to clean up data older than a specified number of days:
+
+```sql
+-- Example call to the function to clean up data older than 180 days
+SELECT cleanup_old_data(180);
+```
+
+**Note:** It is advisable to perform a database backup before initiating the cleanup process.
