@@ -272,16 +272,17 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                 if job_status.status.succeeded:
                     logging.info(f"Job {job_name} succeeded.")
                     jobs.remove(job_name)
-                elif job_status.status.failed < Config.RETRY_COUNT:
-                    logging.warning(
-                        f"Job {job_name} failed. Retrying attempt {job_status.status.failed}/{Config.RETRY_COUNT}..."
-                    )
-                else:
-                    logging.error(
-                        f"Job {job_name} failed. Maximum retries ({Config.RETRY_COUNT}) reached. Exiting the program..."
-                    )
-                    jobs.remove(job_name)
-                    exit(1)
+                elif job_status.status.failed is not None:
+                    if job_status.status.failed < Config.RETRY_COUNT:
+                        logging.warning(
+                            f"Job {job_name} failed. Retrying attempt {job_status.status.failed}/{Config.RETRY_COUNT}..."
+                        )
+                    else:
+                        logging.error(
+                            f"Job {job_name} failed. Maximum retries ({Config.RETRY_COUNT}) reached. Exiting the program..."
+                        )
+                        jobs.remove(job_name)
+                        exit(1)
             except Exception as e:
                 logging.error(f"Error reading job status for {job_name}: {e}")
 
