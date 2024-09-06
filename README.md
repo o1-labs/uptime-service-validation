@@ -58,6 +58,12 @@ These environment variables control the program's runtime:
 - `RETRY_COUNT` - Number of times a batch should be retried before giving up. Default: `3`.
 - `SUBMISSION_STORAGE` - Storage where submissions are kept. Valid options: `POSTGRES` or `CASSANDRA`. Default: `POSTGRES`.
 
+### DevOps Configuration
+
+Configuration related to infra/operations.
+
+- `SPREAD_MAX_SKEW` - The degree of the spread of Stateless Verification workers among the nodes, see: [`maxSkew`](https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/#spread-constraint-definition). Default: `1`.
+
 ### Stateless Verification Tool Configuration
 
 The Coordinator program runs the `stateless-verification-tool` for validation against submissions. Set the following environment variables for this purpose:
