@@ -74,7 +74,8 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
     for index, mini_batch in enumerate(time_intervals):
 
         # Job name
-        job_name = f"delegation-verify-{datetime.now(timezone.utc).strftime('%y-%m-%d-%H-%M')}-{index}"
+        job_group_name = f"delegation-verify-{datetime.now(timezone.utc).strftime('%y-%m-%d-%H-%M')}"
+        job_name = f"{job_group_name}-{index}"
 
         # Define the environment variables
         env_vars = [
@@ -232,6 +233,9 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
             volume_mounts=[auth_volume_mount],
         )
 
+        pod_annotations = {"karpenter.sh/do-not-evict": "true"}
+        pod_labels = {"job-group-name": job_group_name}
+
         # Create the job
         job = client.V1Job(
             api_version="batch/v1",
@@ -241,9 +245,20 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                 ttl_seconds_after_finished=ttl_seconds,
                 template=client.V1PodTemplateSpec(
                     metadata=client.V1ObjectMeta(
-                        annotations={"karpenter.sh/do-not-evict": "true"}
+                        annotations=pod_annotations,
+                        labels=pod_labels
                     ),
                     spec=client.V1PodSpec(
+                        topology_spread_constraints=[
+                            client.V1TopologySpreadConstraint(
+                                max_skew=int(os.environ.get("SPREAD_MAX_SKEW", "1")),
+                                topology_key="kubernetes.io/hostname",
+                                when_unsatisfiable="DoNotSchedule",
+                                label_selector=client.V1LabelSelector(
+                                    match_labels=pod_labels
+                                ),
+                            )
+                        ],
                         init_containers=[init_container],
                         containers=[container],
                         restart_policy="Never",
