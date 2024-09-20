@@ -74,7 +74,9 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
     for index, mini_batch in enumerate(time_intervals):
 
         # Job name
-        job_group_name = f"delegation-verify-{datetime.now(timezone.utc).strftime('%y-%m-%d-%H-%M')}"
+        job_group_name = (
+            f"delegation-verify-{datetime.now(timezone.utc).strftime('%y-%m-%d-%H-%M')}"
+        )
         job_name = f"{job_group_name}-{index}"
 
         # Define the environment variables
@@ -233,7 +235,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
             volume_mounts=[auth_volume_mount],
         )
 
-        pod_annotations = {"karpenter.sh/do-not-evict": "true"}
+        pod_annotations = {"karpenter.sh/do-not-disrupt": "true"}
         pod_labels = {"job-group-name": job_group_name}
 
         # Create the job
@@ -245,8 +247,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                 ttl_seconds_after_finished=ttl_seconds,
                 template=client.V1PodTemplateSpec(
                     metadata=client.V1ObjectMeta(
-                        annotations=pod_annotations,
-                        labels=pod_labels
+                        annotations=pod_annotations, labels=pod_labels
                     ),
                     spec=client.V1PodSpec(
                         topology_spread_constraints=[
