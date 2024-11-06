@@ -63,6 +63,7 @@ These environment variables control the program's runtime:
 Configuration related to infra/operations.
 
 - `SPREAD_MAX_SKEW` - The degree of the spread of Stateless Verification workers among the nodes, see: [`maxSkew`](https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/#spread-constraint-definition). Default: `1`.
+- `K8S_NODE_POOL` (optional) - Name of the node pool to spin pods on.
 
 ### Stateless Verification Tool Configuration
 

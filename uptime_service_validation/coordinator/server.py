@@ -235,6 +235,10 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
             volume_mounts=[auth_volume_mount],
         )
 
+        nodepool = os.environ.get("K8S_NODE_POOL")
+        node_selector = {"karpenter.sh/nodepool": nodepool} if nodepool else None
+        tolerations = [{"key": "karpenter.sh/nodepool", "operator": "Exists"}] if nodepool else None
+
         pod_annotations = {"karpenter.sh/do-not-disrupt": "true"}
         pod_labels = {"job-group-name": job_group_name}
 
@@ -250,6 +254,8 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                         annotations=pod_annotations, labels=pod_labels
                     ),
                     spec=client.V1PodSpec(
+                        node_selector=node_selector,
+                        tolerations=tolerations,
                         topology_spread_constraints=[
                             client.V1TopologySpreadConstraint(
                                 max_skew=int(os.environ.get("SPREAD_MAX_SKEW", "1")),
