@@ -11,8 +11,8 @@ on:
         required: true
         type: string
 env:
-  ECR_REPOSITORY_URL: 673156464838.dkr.ecr.us-west-2.amazonaws.com
-  ECR_REPOSITORY_NAME: delegation-verify-coordinator
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
   DOCKER_TAG_PREFIX: ${{ github.event.inputs.docker_tag_prefix }}
 
 # This allows a subsequently queued workflow run to interrupt previous runs
@@ -23,10 +23,10 @@ concurrency:
 jobs:
   build-docker-image:
     name: Build and Push Docker Image
-    runs-on: minafoundation-default-runners
+    runs-on: ubuntu-latest
     steps:
       - name: 📥 Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: 🏷️ Generate Tag
         run: |
           BRANCH_OR_TAG=$(basename ${{ github.ref }})
@@ -40,19 +40,23 @@ jobs:
             echo "Invalid event. Exiting..."
             exit 1
           fi
-      - name: 🔑 ECR Login
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
-      - name: 🔍 Check if Tag already exists
-        id: checktag
-        uses: tyriis/docker-image-tag-exists@v2.0.1
+      - name: 🔑 Log in to Container Registry
+        uses: docker/login-action@v3
         with:
-          registry: ${{ env.ECR_REPOSITORY_URL}}
-          repository: ${{ env.ECR_REPOSITORY_NAME }}
-          tag: ${{ env.TAG }}
-      - name: 🛠️ Build Uptime Service Validation Docker Image
-        if: steps.checktag.outputs.tag == 'not found'
-        run: DOCKER_BUILDKIT=1 docker build -t ${{ env.ECR_REPOSITORY_URL}}/${{ env.ECR_REPOSITORY_NAME }}:${{ env.TAG }} .
-      - name: 🚚 Push Uptime Service Validation Docker Image
-        if: steps.checktag.outputs.tag == 'not found'
-        run: docker push ${{ env.ECR_REPOSITORY_URL}}/${{ env.ECR_REPOSITORY_NAME }}:${{ env.TAG }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: 🛠️ Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.TAG }}
+          labels: |
+            org.opencontainers.image.title=${{ github.repository }}
+            org.opencontainers.image.description=Mina Delegation Program Coordinator and Validator Component
+            org.opencontainers.image.url=${{ github.event.repository.html_url }}
+            org.opencontainers.image.source=${{ github.event.repository.clone_url }}
+            org.opencontainers.image.version=${{ env.TAG }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+            org.opencontainers.image.revision=${{ github.sha }}
