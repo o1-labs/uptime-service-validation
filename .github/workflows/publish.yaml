@@ -47,7 +47,18 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: 🔍 Check if Tag already exists
+        id: checktag
+        run: |
+          TAG_EXISTS=$(docker manifest inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:${{ env.TAG }} > /dev/null 2>&1 && echo "found" || echo "not found")
+          echo "tag=$TAG_EXISTS" >> $GITHUB_OUTPUT
+          if [ "$TAG_EXISTS" = "found" ]; then
+            echo "::warning::Tag ${{ env.TAG }} already exists in the registry. Skipping build and push."
+          else
+            echo "Tag ${{ env.TAG }} does not exist. Proceeding with build and push."
+          fi
       - name: 🛠️ Build and Push Docker Image
+        if: steps.checktag.outputs.tag == 'not found'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -61,3 +72,9 @@ jobs:
             org.opencontainers.image.version=${{ env.TAG }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
             org.opencontainers.image.revision=${{ github.sha }}
+      - name: ❌ Tag Already Exists
+        if: steps.checktag.outputs.tag == 'found'
+        run: |
+          echo "::error::Tag ${{ env.TAG }} already exists in ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}"
+          echo "Please use a different tag name or delete the existing image."
+          exit 1
