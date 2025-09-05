@@ -466,7 +466,7 @@ def get_contact_details_from_spreadsheet():
     client = gspread.authorize(creds)
     sheet = client.open(spreadsheet_name)
     sheet_instance = sheet.get_worksheet(0)
-    records_data = sheet_instance.get_all_records()
+    records_data = sheet_instance.get_all_records(expected_headers=[])
     table_data = pd.DataFrame(records_data)
     spread_df = table_data.iloc[:, [2, 3, 4]]
     tuples = [tuple(x) for x in spread_df.to_numpy()]
