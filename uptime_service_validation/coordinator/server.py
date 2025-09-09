@@ -173,6 +173,10 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                 name="POSTGRES_PORT",
                 value=Config.POSTGRES_PORT,
             ),
+            client.V1EnvVar(
+                name="POSTGRES_SSLMODE",
+                value=Config.POSTGRES_SSLMODE,
+            ),
         ]
 
         # Entrypoint configmap name
