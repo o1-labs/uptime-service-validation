@@ -176,7 +176,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
         ]
 
         # Entrypoint configmap name
-        entrypoint_configmap_name = f"delegation-verify-coordinator-worker"
+        entrypoint_configmap_name = os.environ.get("WORKER_CONFIGMAP_NAME", "delegation-verify-coordinator-worker")
 
         # Define the volumes
         auth_volume = client.V1Volume(
