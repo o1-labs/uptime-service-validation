@@ -57,7 +57,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
         open("/var/run/secrets/kubernetes.io/serviceaccount/namespace").read().strip()
     )
 
-    service_account_name = f"delegation-verify"
+    service_account_name = os.environ.get("WORKER_SERVICE_ACCOUNT_NAME", "delegation-verify")
 
     worker_cpu_request = os.environ.get("WORKER_CPU_REQUEST")
     worker_memory_request = os.environ.get("WORKER_MEMORY_REQUEST")
