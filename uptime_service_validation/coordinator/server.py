@@ -57,7 +57,7 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
         open("/var/run/secrets/kubernetes.io/serviceaccount/namespace").read().strip()
     )
 
-    service_account_name = f"delegation-verify"
+    service_account_name = os.environ.get("WORKER_SERVICE_ACCOUNT_NAME", "delegation-verify")
 
     worker_cpu_request = os.environ.get("WORKER_CPU_REQUEST")
     worker_memory_request = os.environ.get("WORKER_MEMORY_REQUEST")
@@ -173,10 +173,14 @@ def setUpValidatorPods(time_intervals, logging, worker_image, worker_tag):
                 name="POSTGRES_PORT",
                 value=Config.POSTGRES_PORT,
             ),
+            client.V1EnvVar(
+                name="POSTGRES_SSLMODE",
+                value=Config.POSTGRES_SSLMODE,
+            ),
         ]
 
         # Entrypoint configmap name
-        entrypoint_configmap_name = f"delegation-verify-coordinator-worker"
+        entrypoint_configmap_name = os.environ.get("WORKER_CONFIGMAP_NAME", "delegation-verify-coordinator-worker")
 
         # Define the volumes
         auth_volume = client.V1Volume(
