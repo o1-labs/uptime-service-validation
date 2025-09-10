@@ -72,11 +72,26 @@ invoke drop-database
 ## Configuration
 
 The application is heavily configured via environment variables. Key variables include:
+
+### Core Configuration
 - `POSTGRES_*` - Database connection settings
+  - `POSTGRES_SSLMODE` - SSL mode for PostgreSQL connections (default: "require")
 - `WORKER_IMAGE`, `WORKER_TAG` - Docker image for stateless verifier
 - `SURVEY_INTERVAL_MINUTES` - Batch processing interval (default: 20)
 - `MINI_BATCH_NUMBER` - Number of mini-batches per main batch (default: 5)
 - `TEST_ENV=1` - Run validators as subprocesses instead of Kubernetes pods
+
+### Worker Job Configuration
+- `WORKER_SERVICE_ACCOUNT_NAME` - Kubernetes service account for worker jobs (default: "delegation-verify")
+- `WORKER_CONFIGMAP_NAME` - ConfigMap name containing worker entrypoint script
+- `WORKER_CPU_REQUEST`, `WORKER_MEMORY_REQUEST` - Resource requests for worker pods
+- `WORKER_CPU_LIMIT`, `WORKER_MEMORY_LIMIT` - Resource limits for worker pods
+- `WORKER_TTL_SECONDS_AFTER_FINISHED` - Job cleanup timeout
+
+### Google Sheets Integration
+- `SPREADSHEET_NAME` - Name of Google Sheets document for block producer contact details
+- `SPREADSHEET_CREDENTIALS_JSON` - Path to service account credentials file
+- `IGNORE_APPLICATION_STATUS` - Skip Google Sheets integration if set
 
 ## Key Data Flow
 
@@ -90,3 +105,27 @@ The application is heavily configured via environment variables. Key variables i
 - **points vs points_summary**: `points` table has one row per valid submission, `points_summary` has one row per batch per block producer (crucial for correct scoring)
 - **Batch System**: Uses `bot_logs` table to track batch boundaries and processing state
 - **Scoreboard**: Updated based on `UPTIME_DAYS_FOR_SCORE` (default: 90 days)
+
+## Deployment and Troubleshooting
+
+### Common Issues and Solutions
+
+#### Google Sheets Integration
+- **Service Account Access**: Ensure the Google Sheets document is shared with the service account email found in `SPREADSHEET_CREDENTIALS_JSON`
+- **API Rate Limits**: The system includes exponential backoff retry logic for temporary Google Sheets API failures
+- **Missing Columns**: The system validates spreadsheet structure and handles malformed sheets gracefully
+
+#### Kubernetes Worker Jobs
+- **Service Account**: Use `WORKER_SERVICE_ACCOUNT_NAME` to specify correct Kubernetes service account
+- **ConfigMap**: Ensure worker entrypoint ConfigMap exists with name matching `WORKER_CONFIGMAP_NAME`
+- **Database SSL**: Set `POSTGRES_SSLMODE=disable` if PostgreSQL doesn't support SSL connections
+
+#### S3 Integration
+- **Region Configuration**: Ensure `AWS_REGION` matches the S3 bucket's actual region
+- **Credentials**: Worker jobs inherit AWS credentials from coordinator environment variables
+- **Bucket Access**: Verify IAM permissions include S3:GetObject for the specified bucket
+
+### Error Recovery
+- Google Sheets failures are non-blocking - core validation continues even if contact updates fail
+- Invalid blocks are properly marked when S3 data is unavailable
+- Jobs include automatic cleanup via `WORKER_TTL_SECONDS_AFTER_FINISHED`
