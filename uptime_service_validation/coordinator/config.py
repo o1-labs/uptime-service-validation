@@ -37,6 +37,7 @@ class Config:
     POSTGRES_USER = os.environ["POSTGRES_USER"]
     POSTGRES_PASSWORD = os.environ["POSTGRES_PASSWORD"]
     POSTGRES_PORT = os.environ["POSTGRES_PORT"]
+    POSTGRES_SSLMODE = os.environ.get("POSTGRES_SSLMODE", "require")
 
     # Cassandra / Keyspaces
     AWS_KEYSPACE = os.environ.get("AWS_KEYSPACE")

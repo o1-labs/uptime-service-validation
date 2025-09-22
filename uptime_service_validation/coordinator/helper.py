@@ -14,6 +14,8 @@ from psycopg2 import extras
 import requests
 from oauth2client.service_account import ServiceAccountCredentials
 import gspread
+import time
+import random
 
 from uptime_service_validation.coordinator.config import Config
 
@@ -464,10 +466,32 @@ def get_contact_details_from_spreadsheet():
         spreadsheet_credentials_json, spreadsheet_scope
     )
     client = gspread.authorize(creds)
-    sheet = client.open(spreadsheet_name)
+    print(f"DEBUG: Attempting to open spreadsheet: '{spreadsheet_name}'")
+    print(f"DEBUG: Available spreadsheets: {[s.title for s in client.openall()]}")
+    
+    # Retry logic with exponential backoff
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            sheet = client.open(spreadsheet_name)
+            break
+        except gspread.exceptions.APIError as e:
+            if attempt < max_retries - 1:
+                wait_time = (2 ** attempt) + random.uniform(0, 1)
+                print(f"Google Sheets API unavailable, retrying in {wait_time:.1f}s (attempt {attempt + 1}/{max_retries})")
+                time.sleep(wait_time)
+            else:
+                print(f"Google Sheets API still unavailable after {max_retries} attempts, skipping")
+                return []
     sheet_instance = sheet.get_worksheet(0)
-    records_data = sheet_instance.get_all_records()
+    records_data = sheet_instance.get_all_records(expected_headers=[])
     table_data = pd.DataFrame(records_data)
+    
+    # Check if we have enough columns
+    if table_data.shape[1] < 5:
+        print(f"Warning: Spreadsheet has only {table_data.shape[1]} columns, expected at least 5")
+        return []
+    
     spread_df = table_data.iloc[:, [2, 3, 4]]
     tuples = [tuple(x) for x in spread_df.to_numpy()]
     return tuples
