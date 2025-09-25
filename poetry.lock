@@ -173,17 +173,18 @@ tests-mypy = ["mypy (>=1.11.1) ; platform_python_implementation == \"CPython\" a
 [[package]]
 name = "boto3"
 version = "1.40.38"
-description = "The AWS SDK for Python"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
+
     {file = "boto3-1.40.38-py3-none-any.whl", hash = "sha256:fac337b4f0615e4d6ceee44686e662f51d8e57916ed2bc763468e3e8c611a658"},
     {file = "boto3-1.40.38.tar.gz", hash = "sha256:932ebdd8dbf8ab5694d233df86d5d0950291e0b146c27cb46da8adb4f00f6ca4"},
 ]
 
 [package.dependencies]
 botocore = ">=1.40.38,<1.41.0"
+
 jmespath = ">=0.7.1,<2.0.0"
 s3transfer = ">=0.14.0,<0.15.0"
 
@@ -192,6 +193,7 @@ crt = ["botocore[crt] (>=1.21.0,<2.0a0)"]
 
 [[package]]
 name = "botocore"
+
 version = "1.40.38"
 description = "Low-level, data-driven core of boto 3."
 optional = false
@@ -584,12 +586,14 @@ files = [
 [package.dependencies]
 numpy = ">=1.25"
 
+
 [package.extras]
 bokeh = ["bokeh", "selenium"]
 docs = ["furo", "sphinx (>=7.2)", "sphinx-copybutton"]
 mypy = ["bokeh", "contourpy[bokeh,docs]", "docutils-stubs", "mypy (==1.17.0)", "types-Pillow"]
 test = ["Pillow", "contourpy[test-no-images]", "matplotlib"]
 test-no-images = ["pytest", "pytest-cov", "pytest-rerunfailures", "pytest-xdist", "wurlitzer"]
+
 
 [[package]]
 name = "cycler"
@@ -2281,6 +2285,7 @@ optional = false
 python-versions = ">=3.9"
 groups = ["main", "dev"]
 files = [
+
     {file = "typing_extensions-4.15.0-py3-none-any.whl", hash = "sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548"},
     {file = "typing_extensions-4.15.0.tar.gz", hash = "sha256:0cea48d173cc12fa28ecabc3b837ea3cf6f38c6d1136f85cbaaf598984861466"},
 ]
@@ -2454,4 +2459,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.13"
-content-hash = "6278c68491aa385d5783d2726c2e7e5b53e2901882400d2cb54de9b3e40549c9"
+content-hash = "2f25c89cf75d1ad6fb09e7bb477e99f1891a823a09c835157b83352d0ae3c0b7"
