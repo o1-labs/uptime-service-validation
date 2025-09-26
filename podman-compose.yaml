@@ -13,6 +13,7 @@ services:
       - UPTIME_DAYS_FOR_SCORE=90
       - NO_CHECKS=1
       - TEST_ENV=1 # run subprocesses in test mode (no k8s, no aws, no cassandra)
+      - CONTAINER_RUNTIME=podman
       # PostgreSQL Connection (configurable via env)
       - POSTGRES_HOST=${POSTGRES_HOST:-localhost}
       - POSTGRES_PORT=${POSTGRES_PORT:-5432}

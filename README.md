@@ -181,6 +181,10 @@ If the system encounters any issues while updating statuses, it will log the err
 
 By default, the program runs `stateless-verification-tool` in separate Kubernetes pods. For testing purposes, it can be configured to run them as subprocesses on the same machine. Set the optional environment variable `TEST_ENV=1` for this mode.
 
+When running in test mode (`TEST_ENV=1`), you can also configure the container runtime:
+
+- `CONTAINER_RUNTIME` - Container runtime to use for local testing (default: `docker`). Set to `podman` if using Podman instead of Docker.
+
 ## Running the program
 
 Once everything is configured we can start the program by running:

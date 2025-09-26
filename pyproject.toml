@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "uptime-service-validation"
-version = "0.2.0"
+version = "0.2.1"
 description = "Mina Delegation Program Coordinator and Validator Component"
 authors = ["Mina Foundation"]
 readme = "README.md"

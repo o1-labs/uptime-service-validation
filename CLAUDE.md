@@ -83,6 +83,7 @@ The application is heavily configured via environment variables. Key variables i
 - `SURVEY_INTERVAL_MINUTES` - Batch processing interval (default: 20)
 - `MINI_BATCH_NUMBER` - Number of mini-batches per main batch (default: 5)
 - `TEST_ENV=1` - Run validators as subprocesses instead of Kubernetes pods
+- `CONTAINER_RUNTIME` - Container runtime for local testing (default: "docker", use "podman" for Podman)
 
 ### Worker Job Configuration
 - `WORKER_SERVICE_ACCOUNT_NAME` - Kubernetes service account for worker jobs (default: "delegation-verify")

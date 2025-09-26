@@ -328,7 +328,7 @@ def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
         image = f"{worker_image}:{worker_tag}"
         cassandra_ip = try_get_hostname_ip(os.environ.get("CASSANDRA_HOST"), logging)
         command = [
-            "docker",
+            Config.CONTAINER_RUNTIME,
             "run",
             "--network",
             "host",
