@@ -19,6 +19,7 @@ class Config:
     NETWORK_NAME = os.environ.get("NETWORK_NAME")
     AWS_S3_BUCKET = os.environ.get("AWS_S3_BUCKET")
     AWS_REGION = os.environ.get("AWS_REGION")
+    CONTAINER_RUNTIME = os.environ.get("CONTAINER_RUNTIME", "docker")
 
     # Slack Alerts
     WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
