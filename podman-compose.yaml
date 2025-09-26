@@ -13,7 +13,9 @@ services:
       - UPTIME_DAYS_FOR_SCORE=90
       - NO_CHECKS=1
       - TEST_ENV=1 # run subprocesses in test mode (no k8s, no aws, no cassandra)
-      - CONTAINER_RUNTIME=podman
+      - CONTAINER_RUNTIME=${CONTAINER_RUNTIME:-podman}
+      # Podman socket configuration for container-in-container execution
+      - CONTAINER_HOST=unix:///run/podman/podman.sock
       # PostgreSQL Connection (configurable via env)
       - POSTGRES_HOST=${POSTGRES_HOST:-localhost}
       - POSTGRES_PORT=${POSTGRES_PORT:-5432}
@@ -61,6 +63,8 @@ services:
     volumes:
       # Mount Google Cloud service account credentials if available
       - ${GOOGLE_CREDENTIALS_PATH:-./gcloud.json.test}:/usr/src/app/gcloud:ro
+      # Mount podman socket for container-in-container execution (Linux)
+      - /run/podman/podman.sock:/run/podman/podman.sock:rw
     # Alternative entrypoint for debugging (uncomment to use)
     # entrypoint: ["sleep", "infinity"]
     restart: unless-stopped

@@ -235,7 +235,10 @@ For easier local development and testing, the project includes a `podman-compose
 ### Prerequisites
 
 - [Podman](https://podman.io/) and [podman-compose](https://github.com/containers/podman-compose) installed
+- **Linux system required** for container-in-container execution via podman socket
 - Copy `.env.example` to `.env.example.test` and configure your local environment variables
+
+**Note for macOS users**: The podman-compose setup is designed for Linux systems. On macOS with Podman Machine, run the coordinator directly with Poetry instead of using the containerized approach.
 
 ### Running with Podman Compose
 
