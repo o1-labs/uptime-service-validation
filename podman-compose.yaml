@@ -1,0 +1,72 @@
+version: '3.8'
+services:
+  coordinator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: localhost/uptime-service-validation:latest
+    platform: linux/amd64
+    environment:
+      # Core Configuration
+      - SURVEY_INTERVAL_MINUTES=20
+      - MINI_BATCH_NUMBER=2
+      - UPTIME_DAYS_FOR_SCORE=90
+      - NO_CHECKS=1
+      - TEST_ENV=1 # run subprocesses in test mode (no k8s, no aws, no cassandra)
+      # PostgreSQL Connection (configurable via env)
+      - POSTGRES_HOST=${POSTGRES_HOST:-localhost}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_DB=${POSTGRES_DB:-coordinator}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_SSLMODE=${POSTGRES_SSLMODE:-disable}
+      # Worker Configuration
+      - WORKER_TAG=main-97163be
+      - WORKER_IMAGE=ghcr.io/o1-labs/submission-updater
+      - WORKER_CPU_REQUEST=2
+      - WORKER_CPU_LIMIT=4
+      - WORKER_MEMORY_REQUEST=2Gi
+      - WORKER_MEMORY_LIMIT=8Gi
+      - WORKER_TTL_SECONDS_AFTER_FINISHED=1200
+      - WORKER_SERVICE_ACCOUNT_NAME=delegation-program-verify-coordinator
+      - WORKER_CONFIGMAP_NAME=delegation-program-verify-coordinator-worker
+      # AWS Configuration
+      - AWS_REGION=${AWS_REGION:-us-west-2}
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET:-o1labs-uptime-service-backend}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_ROLE_SESSION_NAME=delegation-program-verify-coordinator
+      # Cassandra Configuration
+      - CASSANDRA_HOST=${CASSANDRA_HOST:-cassandra.us-west-2.amazonaws.com}
+      - CASSANDRA_PORT=${CASSANDRA_PORT:-9142}
+      - AWS_KEYSPACE=${AWS_KEYSPACE}
+      # Network Configuration
+      - PLATFORM=${PLATFORM}
+      - NETWORK_NAME=${NETWORK_NAME:-mainnet}
+      # Google Sheets Configuration
+      - SPREADSHEET_NAME=${SPREADSHEET_NAME:-Mina Foundation Delegation Application (Responses)}
+      - SPREADSHEET_CREDENTIALS_JSON=${SPREADSHEET_CREDENTIALS_JSON:-/usr/src/app/gcloud/gcloud.json.test}
+      - IGNORE_APPLICATION_STATUS=${IGNORE_APPLICATION_STATUS:-1}
+      # Kubernetes Configuration (for local testing)
+      - SPREAD_MAX_SKEW=4
+      - K8S_NODE_POOL=
+      - RETRY_COUNT=6
+      - SUBMISSION_STORAGE=POSTGRES
+      # Volume Mount Paths
+      - AUTH_VOLUME_MOUNT_PATH=/var/mina-delegation-verify-auth
+    network_mode: host
+    ports:
+      - "8080:80"
+    volumes:
+      # Mount Google Cloud service account credentials if available
+      - ${GOOGLE_CREDENTIALS_PATH:-./gcloud.json.test}:/usr/src/app/gcloud:ro
+    # Alternative entrypoint for debugging (uncomment to use)
+    # entrypoint: ["sleep", "infinity"]
+    restart: unless-stopped
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

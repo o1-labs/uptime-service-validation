@@ -49,6 +49,9 @@ poetry run flake8 . --count --exit-zero --max-complexity=10 --max-line-length=12
 ```bash
 # Start the coordinator
 poetry run start
+
+# For local development with podman-compose
+podman-compose --env-file .env.example.test -f podman-compose.yaml up --build
 ```
 
 ### Database Management (using invoke tasks)
@@ -129,3 +132,34 @@ The application is heavily configured via environment variables. Key variables i
 - Google Sheets failures are non-blocking - core validation continues even if contact updates fail
 - Invalid blocks are properly marked when S3 data is unavailable
 - Jobs include automatic cleanup via `WORKER_TTL_SECONDS_AFTER_FINISHED`
+
+## Local Development with Podman Compose
+
+The project includes `podman-compose.yaml` for streamlined local development and testing:
+
+### Quick Start
+```bash
+# Copy and configure environment file
+cp .env.example .env.example.test
+# Edit .env.example.test with your local settings
+
+# Build and run the service
+podman-compose --env-file .env.example.test -f podman-compose.yaml up --build
+```
+
+### Key Features
+- **Automatic Test Mode**: Sets `TEST_ENV=1` to run validators as subprocesses instead of Kubernetes pods
+- **Host Networking**: Simplified database connectivity for local development
+- **Pre-configured Environment**: Sensible defaults for all required environment variables
+- **Volume Mounting**: Automatic mounting of Google Cloud credentials for Google Sheets integration
+- **Health Checks**: Built-in container health monitoring
+- **Debugging Support**: Easy container debugging with sleep infinity entrypoint option
+
+### Environment Configuration
+The compose file supports all standard environment variables through `.env.example.test`:
+- Database configuration (PostgreSQL connection settings)
+- AWS configuration (S3 bucket, region, credentials)
+- Google Sheets integration settings
+- Worker and batch processing configuration
+
+This setup allows developers to quickly test the coordinator locally without needing a full Kubernetes environment.

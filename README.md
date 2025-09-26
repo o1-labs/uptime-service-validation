@@ -224,6 +224,78 @@ docker run -e SURVEY_INTERVAL_MINUTES \
            uptime-service-validation
 ```
 
+## Local Development with Podman Compose
+
+For easier local development and testing, the project includes a `podman-compose.yaml` file that sets up the coordinator service with proper configuration and environment variables.
+
+### Prerequisites
+
+- [Podman](https://podman.io/) and [podman-compose](https://github.com/containers/podman-compose) installed
+- Copy `.env.example` to `.env.example.test` and configure your local environment variables
+
+### Running with Podman Compose
+
+1. **Configure environment variables:**
+
+   ```sh
+   cp .env.example .env.example.test
+   # Edit .env.example.test with your local configuration
+   ```
+
+2. **Build and run the service:**
+
+   ```sh
+   # For local testing (includes postgres, cassandra, and other dependencies)
+   podman-compose --env-file .env.example.test -f podman-compose.yaml up --build
+
+   # Run in background
+   podman-compose --env-file .env.example.test -f podman-compose.yaml up --build -d
+   ```
+
+3. **Stop the service:**
+
+   ```sh
+   podman-compose --env-file .env.example.test -f podman-compose.yaml down
+   ```
+
+### Podman Compose Configuration
+
+The `podman-compose.yaml` file includes:
+
+- **Test Environment**: Automatically sets `TEST_ENV=1` to run validators as subprocesses instead of Kubernetes pods
+- **Network Configuration**: Uses host networking for easier database connectivity
+- **Volume Mounts**: Mounts Google Cloud credentials for Google Sheets integration
+- **Health Checks**: Built-in health check to verify the service is running correctly
+- **Environment Variables**: Pre-configured with sensible defaults for local development
+
+### Key Environment Variables for Local Testing
+
+The compose file uses environment variables that can be overridden in your `.env.example.test` file:
+
+- `POSTGRES_HOST` - PostgreSQL server (default: `localhost`)
+- `POSTGRES_PORT` - PostgreSQL port (default: `5432`)
+- `POSTGRES_DB` - Database name (default: `coordinator`)
+- `POSTGRES_USER` - Database username (default: `postgres`)
+- `POSTGRES_PASSWORD` - Database password (default: `password`)
+- `AWS_REGION` - AWS region for S3 access (default: `us-west-2`)
+- `AWS_S3_BUCKET` - S3 bucket for block data (default: `o1labs-uptime-service-backend`)
+- `GOOGLE_CREDENTIALS_PATH` - Path to Google service account credentials file
+
+### Debugging
+
+To debug the container, you can override the entrypoint:
+
+```sh
+# Uncomment the entrypoint line in podman-compose.yaml to keep container running
+# entrypoint: ["sleep", "infinity"]
+```
+
+Then exec into the running container:
+
+```sh
+podman exec -it uptime-service-validation-o1labs_coordinator_1 /bin/bash
+```
+
 ## Maintenance
 
 ### Database Cleanup
