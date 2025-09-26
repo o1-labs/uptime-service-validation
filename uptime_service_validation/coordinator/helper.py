@@ -12,7 +12,7 @@ import pandas as pd
 import psycopg2
 from psycopg2 import extras
 import requests
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2 import service_account
 import gspread
 import time
 import random
@@ -462,8 +462,8 @@ def get_contact_details_from_spreadsheet():
     spreadsheet_scope = Config.SPREADSHEET_SCOPE
     spreadsheet_name = Config.SPREADSHEET_NAME
     spreadsheet_credentials_json = Config.SPREADSHEET_CREDENTIALS_JSON
-    creds = ServiceAccountCredentials.from_json_keyfile_name(
-        spreadsheet_credentials_json, spreadsheet_scope
+    creds = service_account.Credentials.from_service_account_file(
+        spreadsheet_credentials_json, scopes=spreadsheet_scope
     )
     client = gspread.authorize(creds)
     print(f"DEBUG: Attempting to open spreadsheet: '{spreadsheet_name}'")
