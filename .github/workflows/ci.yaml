@@ -41,3 +41,22 @@ jobs:
     - name: 🛠️ Build Docker image
       run: |
         docker build -t uptime-service-validation .
+
+    - name: 🚬 Smoke-test image
+      run: |
+        set -euo pipefail
+        IMAGE=uptime-service-validation
+
+        # The coordinator's TEST_ENV branch shells out to `docker run` to
+        # spawn worker containers, so the CLI must be on PATH inside the
+        # image. v2.0.9 shipped without it (the daemon was installed but
+        # the CLI binary was dropped by --no-install-recommends); this
+        # check catches that class of regression in 5 seconds.
+        docker run --rm "$IMAGE" sh -c "command -v docker && docker --version"
+
+        # `poetry run start` is the image's CMD; both must be on PATH.
+        docker run --rm "$IMAGE" sh -c "command -v poetry"
+
+        # Coordinator entrypoint module must import without runtime errors.
+        # Catches accidental syntax breaks, missing deps, broken imports.
+        docker run --rm "$IMAGE" python -c "from uptime_service_validation.coordinator import coordinator"
