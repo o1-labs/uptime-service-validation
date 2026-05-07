@@ -355,6 +355,13 @@ def setUpValidatorProcesses(time_intervals, logging, worker_image, worker_tag):
             "AWS_S3_BUCKET",
             "-e",
             "AWS_REGION",
+            # Forwarded for S3-compatible storage emulation (MinIO, LocalStack)
+            # in TEST_ENV mode. Production AWS deployments leave both unset, so
+            # workers fall back to the SDK default (real AWS S3, virtual-hosted).
+            "-e",
+            "AWS_ENDPOINT_URL_S3",
+            "-e",
+            "AWS_S3_FORCE_PATH_STYLE",
             "-e",
             f"NETWORK_NAME={Config.NETWORK_NAME}",
             "-e",
