@@ -6,8 +6,10 @@ WORKDIR /usr/src/app
 
 # Install system dependencies required for psycopg2 or other PostgreSQL interactions.
 # `docker.io` provides the docker CLI, which the coordinator invokes via
-# subprocess in TEST_ENV mode to spawn worker containers.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# subprocess in TEST_ENV mode to spawn worker containers. Recommends are
+# required: on Debian's slim base the CLI binary (/usr/bin/docker) ships in
+# a recommended package, not in docker.io itself.
+RUN apt-get update && apt-get install -y \
     libpq-dev \
     libpq5 \
     build-essential \
