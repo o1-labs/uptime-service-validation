@@ -4,11 +4,14 @@ FROM python:3.12.11-slim
 # Set the working directory in the container
 WORKDIR /usr/src/app
 
-# Install system dependencies required for psycopg2 or other PostgreSQL interactions
-RUN apt-get update && apt-get install -y \
+# Install system dependencies required for psycopg2 or other PostgreSQL interactions.
+# `docker.io` provides the docker CLI, which the coordinator invokes via
+# subprocess in TEST_ENV mode to spawn worker containers.
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     libpq5 \
     build-essential \
+    docker.io \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the current directory contents into the container at /usr/src/app
