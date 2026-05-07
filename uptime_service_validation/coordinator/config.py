@@ -31,12 +31,15 @@ class Config:
     VALID_STORAGE_OPTIONS = [STORAGE_CASSANDRA, STORAGE_POSTGRES]
     SUBMISSION_STORAGE = os.getenv("SUBMISSION_STORAGE", STORAGE_POSTGRES).upper()
 
-    # Postgres
-    POSTGRES_HOST = os.environ["POSTGRES_HOST"]
-    POSTGRES_DB = os.environ["POSTGRES_DB"]
-    POSTGRES_USER = os.environ["POSTGRES_USER"]
-    POSTGRES_PASSWORD = os.environ["POSTGRES_PASSWORD"]
-    POSTGRES_PORT = os.environ["POSTGRES_PORT"]
+    # Postgres. Read lazily (`.get()` instead of `[]`) so that importing
+    # this module doesn't require these to be set — useful for tooling,
+    # smoke tests, and any context that doesn't actually run the
+    # coordinator. `Config.validate()` enforces presence at startup.
+    POSTGRES_HOST = os.environ.get("POSTGRES_HOST")
+    POSTGRES_DB = os.environ.get("POSTGRES_DB")
+    POSTGRES_USER = os.environ.get("POSTGRES_USER")
+    POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD")
+    POSTGRES_PORT = os.environ.get("POSTGRES_PORT")
     POSTGRES_SSLMODE = os.environ.get("POSTGRES_SSLMODE", "require")
 
     # Cassandra / Keyspaces
@@ -92,6 +95,28 @@ class Config:
         :return: True if the application should ignore the application status.
         """
         return bool_env_var_set("IGNORE_APPLICATION_STATUS")
+
+    @classmethod
+    def validate(cls):
+        """Raise ValueError if any required environment variable is missing.
+
+        Should be called at startup (e.g. from `coordinator.main()`)
+        before any subsystem that depends on these. The class-level reads
+        above use `.get()`, so missing values surface as `None` until
+        this method is called and reports them clearly.
+        """
+        required = {
+            "POSTGRES_HOST": cls.POSTGRES_HOST,
+            "POSTGRES_DB": cls.POSTGRES_DB,
+            "POSTGRES_USER": cls.POSTGRES_USER,
+            "POSTGRES_PASSWORD": cls.POSTGRES_PASSWORD,
+            "POSTGRES_PORT": cls.POSTGRES_PORT,
+        }
+        missing = [name for name, value in required.items() if not value]
+        if missing:
+            raise ValueError(
+                "Missing required environment variables: " + ", ".join(missing)
+            )
 
 
 def bool_env_var_set(env_var_name):

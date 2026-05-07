@@ -420,6 +420,8 @@ def main():
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
+    Config.validate()
+
     if Config.SUBMISSION_STORAGE not in Config.VALID_STORAGE_OPTIONS:
         raise ValueError(
             f"Invalid storage option: {Config.SUBMISSION_STORAGE}. Valid options are {Config.VALID_STORAGE_OPTIONS}"
