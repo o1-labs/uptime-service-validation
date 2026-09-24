@@ -10,6 +10,12 @@ from uptime_service_validation.maintenance.indexes import (
     SUBMISSIONS_SUBMITTED_AT,
     ensure_index_concurrently,
 )
+from uptime_service_validation.maintenance.score_corrections import (
+    credit_rejected_submissions,
+    exclude_batches,
+    list_corrections,
+    revert_correction,
+)
 
 
 @task
@@ -224,9 +230,6 @@ def score_correction_exclude_batches(ctx, correction, start, end, reason, apply=
 
     Dry run by default: prints the score change of every BP, then rolls back.
     """
-    from uptime_service_validation.maintenance import connect_from_env
-    from uptime_service_validation.maintenance.score_corrections import exclude_batches
-
     conn = connect_from_env()
     try:
         exclude_batches(conn, correction, start, end, reason, apply=apply)
@@ -234,20 +237,23 @@ def score_correction_exclude_batches(ctx, correction, start, end, reason, apply=
         conn.close()
 
 
-@task(help={**_CORRECTION_HELP, "error": "Substring of submissions.validation_error to credit"})
-def score_correction_credit_rejected(ctx, correction, start, end, error, reason, apply=False):
+@task(help={
+    **_CORRECTION_HELP,
+    "error": "Substring of submissions.validation_error to credit",
+    "require_point_within_hours": "Credit a batch only if the BP earned a real point within N hours of it",
+})
+def score_correction_credit_rejected(ctx, correction, start, end, error, reason, apply=False,
+                                     require_point_within_hours=None):
     """Credit the batches in which a BP's submission was rejected with ERROR and it got no point.
 
     Dry run by default: prints the score change of every BP, then rolls back.
     """
-    from uptime_service_validation.maintenance import connect_from_env
-    from uptime_service_validation.maintenance.score_corrections import (
-        credit_rejected_submissions,
-    )
-
     conn = connect_from_env()
     try:
-        credit_rejected_submissions(conn, correction, start, end, error, reason, apply=apply)
+        credit_rejected_submissions(
+            conn, correction, start, end, error, reason, apply=apply,
+            require_point_within_hours=float(require_point_within_hours) if require_point_within_hours else None,
+        )
     finally:
         conn.close()
 
@@ -255,9 +261,6 @@ def score_correction_credit_rejected(ctx, correction, start, end, error, reason,
 @task(help={"correction": _CORRECTION_HELP["correction"], "apply": _CORRECTION_HELP["apply"]})
 def score_correction_revert(ctx, correction, apply=False):
     """Undo every change recorded under CORRECTION. Dry run by default."""
-    from uptime_service_validation.maintenance import connect_from_env
-    from uptime_service_validation.maintenance.score_corrections import revert_correction
-
     conn = connect_from_env()
     try:
         revert_correction(conn, correction, apply=apply)
@@ -268,9 +271,6 @@ def score_correction_revert(ctx, correction, apply=False):
 @task
 def score_correction_list(ctx):
     """List every recorded score correction."""
-    from uptime_service_validation.maintenance import connect_from_env
-    from uptime_service_validation.maintenance.score_corrections import list_corrections
-
     conn = connect_from_env()
     try:
         list_corrections(conn)

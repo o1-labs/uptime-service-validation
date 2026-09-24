@@ -222,10 +222,12 @@ BEGIN
 
   -- Clean up statehash and count rows deleted
   WITH del AS (
+    -- NOT EXISTS, not NOT IN: score-correction credits are points rows with
+    -- statehash_id NULL, and a single NULL makes NOT IN match nothing.
     DELETE FROM statehash
-    WHERE id NOT IN (SELECT DISTINCT statehash_id FROM bot_logs_statehash)
-      AND id NOT IN (SELECT DISTINCT parent_statehash_id FROM bot_logs_statehash)
-      AND id NOT IN (SELECT DISTINCT statehash_id FROM points)
+    WHERE NOT EXISTS (SELECT 1 FROM bot_logs_statehash b WHERE b.statehash_id = statehash.id)
+      AND NOT EXISTS (SELECT 1 FROM bot_logs_statehash b WHERE b.parent_statehash_id = statehash.id)
+      AND NOT EXISTS (SELECT 1 FROM points p WHERE p.statehash_id = statehash.id)
     RETURNING 1
   )
   SELECT COUNT(*) INTO statehash_deleted FROM del;

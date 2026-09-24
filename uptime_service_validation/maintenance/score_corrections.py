@@ -177,6 +177,22 @@ def exclude_batches(conn, correction, start, end, reason, apply=False, days=90, 
         )
         n_batches, first, last = cur.fetchone()
         log(f"[{correction}] excluding {n_batches} batches ({first} .. {last})")
+        # Batches are contiguous, not aligned to the clock: the ones that
+        # cross --start or --end are kept. Say so, instead of silently.
+        cur.execute(
+            """
+            SELECT to_timestamp(batch_start_epoch), to_timestamp(batch_end_epoch)
+            FROM bot_logs
+            WHERE batch_start_epoch < %(e)s AND batch_end_epoch > %(s)s
+              AND NOT (batch_start_epoch >= %(s)s AND batch_end_epoch <= %(e)s)
+              AND files_processed > -1
+            ORDER BY batch_start_epoch
+            """,
+            params,
+        )
+        for b_start, b_end in cur.fetchall():
+            log(f"[{correction}] WARNING: batch {b_start} .. {b_end} overlaps the period "
+                "partially and is NOT excluded; widen --start/--end to include it")
         cur.execute(
             """
             INSERT INTO score_corrections (correction, action, bot_log_id, old_files_processed, reason)
@@ -202,12 +218,18 @@ def exclude_batches(conn, correction, start, end, reason, apply=False, days=90, 
 
 
 def credit_rejected_submissions(
-    conn, correction, start, end, error, reason, apply=False, days=90, log=print
+    conn, correction, start, end, error, reason, apply=False, days=90, log=print,
+    require_point_within_hours=None,
 ):
     """Credit 1 point for each (BP, batch) in [start, end) where the BP had a
     submission whose validation_error contains `error` and got no point.
 
     Excluded batches (files_processed = -1) are never credited.
+
+    A rejected submission has no state hash, so the credit cannot repeat the
+    "on the canonical chain" check. With require_point_within_hours=N, a
+    batch is credited only if the BP earned a real point in a batch ending
+    within N hours of it, as evidence that its node was on the chain then.
     """
     if not error:
         raise ValueError("error must be a non-empty substring of validation_error")
@@ -222,6 +244,7 @@ def credit_rejected_submissions(
         # submissions.submitted_at is a UTC timestamp without time zone
         "s_ts": start.replace(tzinfo=None),
         "e_ts": end.replace(tzinfo=None),
+        "near": int(require_point_within_hours * 3600) if require_point_within_hours else None,
     }
 
     def change(cur):
@@ -277,11 +300,20 @@ def credit_rejected_submissions(
                 SELECT 1 FROM points_summary ps
                 WHERE ps.node_id = n.id AND ps.bot_log_id = r.bot_log_id
             )
-            """
+            AND (%(near)s::bigint IS NULL OR EXISTS (
+                SELECT 1 FROM bot_logs b2
+                JOIN points_summary ps2 ON ps2.bot_log_id = b2.id AND ps2.node_id = n.id
+                WHERE b2.batch_end_epoch BETWEEN r.batch_end_epoch - %(near)s::bigint
+                                             AND r.batch_end_epoch + %(near)s::bigint
+            ))
+            """,
+            params,
         )
         cur.execute("SELECT count(*), count(DISTINCT node_id) FROM _credits")
         n_credits, n_bps = cur.fetchone()
-        log(f"[{correction}] crediting {n_credits} batches to {n_bps} BPs")
+        guard = (f" (only with a real point within {require_point_within_hours} h)"
+                 if require_point_within_hours else "")
+        log(f"[{correction}] crediting {n_credits} batches to {n_bps} BPs{guard}")
         cur.execute(
             """
             WITH ins AS (
@@ -321,6 +353,22 @@ def revert_correction(conn, correction, apply=False, days=90, log=print):
             """,
             params,
         )
+        # (BP, batch) pairs that a points row still backs, after the credits
+        # are gone. points has no index on (bot_log_id, node_id), so read it
+        # once instead of probing it per pair.
+        cur.execute(
+            f"""
+            CREATE TEMP TABLE _backed ON COMMIT DROP AS
+            SELECT DISTINCT p.bot_log_id, p.node_id FROM points p
+            WHERE p.bot_log_id IN (
+                SELECT sc.bot_log_id FROM score_corrections sc
+                WHERE {active} AND sc.action IN ('credit_point', 'remove_point')
+            )
+            """,
+            params,
+        )
+        cur.execute("CREATE INDEX ON _backed (bot_log_id, node_id)")
+        cur.execute("ANALYZE _backed")
         # Drop the summary row only if no real point is left for that pair.
         cur.execute(
             f"""
@@ -328,8 +376,8 @@ def revert_correction(conn, correction, apply=False, days=90, log=print):
             WHERE {active} AND sc.action = 'credit_point'
               AND ps.bot_log_id = sc.bot_log_id AND ps.node_id = sc.node_id
               AND NOT EXISTS (
-                  SELECT 1 FROM points p
-                  WHERE p.bot_log_id = sc.bot_log_id AND p.node_id = sc.node_id
+                  SELECT 1 FROM _backed k
+                  WHERE k.bot_log_id = sc.bot_log_id AND k.node_id = sc.node_id
               )
             """,
             params,
@@ -340,6 +388,12 @@ def revert_correction(conn, correction, apply=False, days=90, log=print):
             SELECT sc.bot_log_id, sc.node_id FROM score_corrections sc
             WHERE {active} AND sc.action = 'remove_point'
               AND EXISTS (SELECT 1 FROM bot_logs b WHERE b.id = sc.bot_log_id)
+              -- Only restore a summary row that a points row still backs: a
+              -- credit reverted in between must not come back as a phantom.
+              AND EXISTS (
+                  SELECT 1 FROM _backed k
+                  WHERE k.bot_log_id = sc.bot_log_id AND k.node_id = sc.node_id
+              )
             ON CONFLICT (bot_log_id, node_id) DO NOTHING
             """,
             params,

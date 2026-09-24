@@ -186,3 +186,49 @@ def test_revert_restores_the_original_state(world):
     assert all(row[4] is not None for row in list_corrections(conn, **QUIET)), "all marked reverted"
     with pytest.raises(ValueError):
         revert_correction(conn, "sok", apply=True, **QUIET)
+
+
+def test_revert_is_exact_when_exclusion_follows_credit_on_same_batch(world):
+    conn = world["conn"]
+    summary_before, files_before = summary_pairs(conn), files_processed(conn)
+    credit_rejected_submissions(conn, "sok", *period(), SOK, "t", apply=True, **QUIET)
+    exclude_batches(conn, "fork", iso(T0 + STEP * 2), iso(T0 + STEP * 3), "t", apply=True, **QUIET)
+    revert_correction(conn, "sok", apply=True, **QUIET)
+    revert_correction(conn, "fork", apply=True, **QUIET)
+    assert files_processed(conn) == files_before
+    assert summary_pairs(conn) == summary_before, "phantom points_summary row left behind"
+
+
+def test_exclude_reports_partially_overlapping_batches(world):
+    lines = []
+    exclude_batches(world["conn"], "fork", iso(T0 + timedelta(minutes=10)), iso(T0 + timedelta(minutes=70)),
+                    "t", log=lines.append)
+    assert any("partially" in line and "NOT excluded" in line for line in lines), lines
+
+
+def test_cleanup_old_data_still_deletes_orphan_statehash_after_credit(world):
+    conn = world["conn"]
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO statehash (value) VALUES ('tip') RETURNING id")
+        cur.execute("UPDATE points SET statehash_id = %s", (cur.fetchone()[0],))
+        cur.execute("INSERT INTO bot_logs_statehash (parent_statehash_id, statehash_id, weight, bot_log_id) "
+                    "SELECT statehash_id, statehash_id, 1, bot_log_id FROM points LIMIT 1")
+        cur.execute("INSERT INTO statehash (value) VALUES ('orphan1')")
+        cur.execute("SELECT cleanup_old_data(100000)")
+        cur.execute("SELECT count(*) FROM statehash WHERE value = 'orphan1'")
+        assert cur.fetchone()[0] == 0  # control
+        cur.execute("INSERT INTO statehash (value) VALUES ('orphan2')")
+    credit_rejected_submissions(conn, "sok", *period(), SOK, "t", apply=True, **QUIET)
+    with conn.cursor() as cur:
+        cur.execute("SELECT cleanup_old_data(100000)")
+        cur.execute("SELECT count(*) FROM statehash WHERE value = 'orphan2'")
+        assert cur.fetchone()[0] == 0
+
+
+@pytest.mark.parametrize("hours, expected", [(None, 1), (1, 1), (0.25, 0)])
+def test_credit_guard_requires_a_real_point_nearby(world, hours, expected):
+    """HIT's last real point is in batch 2 (ends 20 min before the rejected
+    batch 3 ends): a 1 h window credits it, a 15 min window doesn't."""
+    result = credit_rejected_submissions(world["conn"], "sok", *period(), SOK, "t",
+                                         require_point_within_hours=hours, **QUIET)
+    assert result["credits"] == expected
