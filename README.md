@@ -242,15 +242,25 @@ SELECT cleanup_old_data(180);
 Maintenance tasks are `invoke` tasks that ship in the coordinator image. They read the same `POSTGRES_*` variables as the coordinator, so the simplest way to run them is inside the running coordinator pod:
 
 ```sh
-kubectl -n <namespace> exec deploy/<coordinator-deployment> -- invoke --list
+kubectl -n delegation-program-validation exec deploy/delegation-program-verify-coordinator -- invoke --list
 ```
+
+(Mainnet values. The coordinator container's working directory is `/usr/src/app`, where `tasks.py` is.)
 
 #### Index on `submissions.submitted_at`
 
-The coordinator loads each batch by time range only. Without an index on `submitted_at`, every batch reads the whole `submissions` table. New databases get the index from `create_tables.sql`. On an existing database, create it online:
+The coordinator loads each batch by time range only. Without an index on `submitted_at`, every batch reads the whole `submissions` table.
+
+`invoke create-database` builds this index with `CREATE INDEX CONCURRENTLY` right after it applies `create_tables.sql`. The coordinator chart's `initdb` initContainer runs `invoke create-database` on every pod start, so deploying an image with this change creates the index online, without blocking the backend's inserts. When the index is valid, the step does nothing.
+
+`CREATE INDEX CONCURRENTLY` waits for transactions that are open when it starts, for example the hourly database dump (`delegation-program-db-dump`, at minute 0). On the first deploy, the coordinator can start later by up to the duration of one dump. Deploy just after a dump finishes to avoid this.
+
+`create_tables.sql` itself must never create indexes on `submissions` or other continuously-written tables: it runs on every start, and a plain `CREATE INDEX` blocks writes for the whole build.
+
+To rebuild the index manually (for example after an interrupted build left it invalid):
 
 ```sh
-kubectl -n <namespace> exec deploy/<coordinator-deployment> -- invoke add-submissions-index
+kubectl -n delegation-program-validation exec deploy/delegation-program-verify-coordinator -- invoke add-submissions-index
 ```
 
-The task uses `CREATE INDEX CONCURRENTLY`, so the backend can continue to insert submissions during the build. It is safe to run again: it does nothing if the index is valid, and it replaces an invalid index left by an interrupted build.
+The task is safe to run again: it does nothing if the index is valid, it replaces an invalid index left by an interrupted build, it refuses to touch an index with the same name but another definition, and parallel runs build the index only once.

@@ -5,6 +5,12 @@ import os
 import psycopg2
 from psycopg2 import sql
 
+from uptime_service_validation.maintenance import connect_from_env
+from uptime_service_validation.maintenance.indexes import (
+    SUBMISSIONS_SUBMITTED_AT,
+    ensure_index_concurrently,
+)
+
 
 @task
 def create_database(ctx):
@@ -53,6 +59,9 @@ def create_database(ctx):
         print("'create_tables.sql' script completed successfully")
 
     cursor.close()
+    # Indexes on continuously-written tables are built online, outside the
+    # script: it runs on every coordinator start and must never block writes.
+    ensure_index_concurrently(conn, **SUBMISSIONS_SUBMITTED_AT)
     conn.close()
 
 
@@ -189,14 +198,10 @@ def drop_database(ctx):
 def add_submissions_index(ctx):
     """Create idx_submissions_submitted_at online (CREATE INDEX CONCURRENTLY).
 
-    Safe to run against a live database and safe to re-run.
+    Safe to run against a live database and safe to re-run. `invoke
+    create-database` already does this on every coordinator start; use this
+    task for a manual rebuild.
     """
-    from uptime_service_validation.maintenance import connect_from_env
-    from uptime_service_validation.maintenance.indexes import (
-        SUBMISSIONS_SUBMITTED_AT,
-        ensure_index_concurrently,
-    )
-
     conn = connect_from_env(autocommit=True)
     try:
         ensure_index_concurrently(conn, **SUBMISSIONS_SUBMITTED_AT)

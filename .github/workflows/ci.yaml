@@ -62,5 +62,7 @@ jobs:
         docker run --rm "$IMAGE" python -c "from uptime_service_validation.coordinator import coordinator"
 
         # Maintenance tasks are run in-cluster with `kubectl exec ... invoke`;
-        # they must be listed from the image's working directory.
-        docker run --rm "$IMAGE" invoke --list | grep add-submissions-index
+        # they must be listed from the image's working directory, and
+        # tasks.py must import the maintenance package (create-database uses it).
+        docker run --rm "$IMAGE" invoke --list | grep -E "create-database|add-submissions-index"
+        docker run --rm "$IMAGE" python -c "import uptime_service_validation.maintenance.indexes"
