@@ -264,3 +264,18 @@ kubectl -n delegation-program-validation exec deploy/delegation-program-verify-c
 ```
 
 The task is safe to run again: it does nothing if the index is valid, it replaces an invalid index left by an interrupted build, it refuses to touch an index with the same name but another definition, and parallel runs build the index only once.
+
+#### Score corrections
+
+When block producers lose points through no fault of their own (a verifier bug, a hard-fork transition), the scores can be corrected by hand:
+
+| Task | What it does |
+|---|---|
+| `score-correction-exclude-batches` | Removes the batches inside a period from every BP's score (numerator and denominator). |
+| `score-correction-credit-rejected` | Gives 1 point for each batch in which a BP had a submission rejected with a given validation error and got no point. |
+| `score-correction-revert` | Undoes every change recorded under a correction label. |
+| `score-correction-list` | Lists the recorded corrections. |
+
+Every task is a dry run unless you add `--apply`: it makes the change in a transaction, prints the score change of every BP, and rolls back. Every change is recorded in the `score_corrections` table under the `--correction` label, so it can be reviewed and reverted. The coordinator publishes the new scores at its next batch; rows already in `score_history` are not rewritten.
+
+See [docs/score-corrections](docs/score-corrections) for the corrections that were made and their runbooks.
