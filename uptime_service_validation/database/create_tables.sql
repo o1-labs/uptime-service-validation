@@ -103,6 +103,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_submissions_submitter_date ON submissions U
 -- Additional indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_submissions_submitter_date ON submissions (submitter, submitted_at_date);
 CREATE INDEX IF NOT EXISTS idx_submissions_submitter_datetime ON submissions (submitter, submitted_at DESC);
+-- The coordinator loads each batch by time range alone (DB.get_submissions),
+-- which the submitter-leading indexes above can't serve: without this index
+-- every batch is a sequential scan of the whole table.
+-- On an existing database, create it online with `invoke add-submissions-index`.
+CREATE INDEX IF NOT EXISTS idx_submissions_submitted_at ON submissions (submitted_at);
 
 -- Table creation for points_summary
 -- The points_summary table aggregates data related to node scoring.

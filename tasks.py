@@ -183,3 +183,22 @@ def drop_database(ctx):
 
     cursor.close()
     conn.close()
+
+
+@task
+def add_submissions_index(ctx):
+    """Create idx_submissions_submitted_at online (CREATE INDEX CONCURRENTLY).
+
+    Safe to run against a live database and safe to re-run.
+    """
+    from uptime_service_validation.maintenance import connect_from_env
+    from uptime_service_validation.maintenance.indexes import (
+        SUBMISSIONS_SUBMITTED_AT,
+        ensure_index_concurrently,
+    )
+
+    conn = connect_from_env(autocommit=True)
+    try:
+        ensure_index_concurrently(conn, **SUBMISSIONS_SUBMITTED_AT)
+    finally:
+        conn.close()

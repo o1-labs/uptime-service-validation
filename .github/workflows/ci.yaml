@@ -60,3 +60,7 @@ jobs:
         # Coordinator entrypoint module must import without runtime errors.
         # Catches accidental syntax breaks, missing deps, broken imports.
         docker run --rm "$IMAGE" python -c "from uptime_service_validation.coordinator import coordinator"
+
+        # Maintenance tasks are run in-cluster with `kubectl exec ... invoke`;
+        # they must be listed from the image's working directory.
+        docker run --rm "$IMAGE" invoke --list | grep add-submissions-index

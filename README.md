@@ -236,3 +236,21 @@ SELECT cleanup_old_data(180);
 ```
 
 **Note:** It is advisable to perform a database backup before initiating the cleanup process.
+
+### Maintenance tasks in the cluster
+
+Maintenance tasks are `invoke` tasks that ship in the coordinator image. They read the same `POSTGRES_*` variables as the coordinator, so the simplest way to run them is inside the running coordinator pod:
+
+```sh
+kubectl -n <namespace> exec deploy/<coordinator-deployment> -- invoke --list
+```
+
+#### Index on `submissions.submitted_at`
+
+The coordinator loads each batch by time range only. Without an index on `submitted_at`, every batch reads the whole `submissions` table. New databases get the index from `create_tables.sql`. On an existing database, create it online:
+
+```sh
+kubectl -n <namespace> exec deploy/<coordinator-deployment> -- invoke add-submissions-index
+```
+
+The task uses `CREATE INDEX CONCURRENTLY`, so the backend can continue to insert submissions during the build. It is safe to run again: it does nothing if the index is valid, and it replaces an invalid index left by an interrupted build.
