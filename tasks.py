@@ -10,6 +10,12 @@ from uptime_service_validation.maintenance.indexes import (
     SUBMISSIONS_SUBMITTED_AT,
     ensure_index_concurrently,
 )
+from uptime_service_validation.maintenance.score_corrections import (
+    credit_rejected_submissions,
+    exclude_batches,
+    list_corrections,
+    revert_correction,
+)
 
 
 @task
@@ -205,5 +211,68 @@ def add_submissions_index(ctx):
     conn = connect_from_env(autocommit=True)
     try:
         ensure_index_concurrently(conn, **SUBMISSIONS_SUBMITTED_AT)
+    finally:
+        conn.close()
+
+
+_CORRECTION_HELP = {
+    "correction": "Label for this correction; used to list and revert it, e.g. 2026-09-mesa-fork",
+    "start": "Start of the period, ISO-8601 with timezone, e.g. 2026-09-03T15:00:00Z",
+    "end": "End of the period (exclusive), ISO-8601 with timezone",
+    "reason": "Free text stored with every change, e.g. a link to the incident",
+    "apply": "Commit the change. Without it the task is a dry run",
+}
+
+
+@task(help=_CORRECTION_HELP)
+def score_correction_exclude_batches(ctx, correction, start, end, reason, apply=False):
+    """Remove the batches inside [start, end) from every BP's score.
+
+    Dry run by default: prints the score change of every BP, then rolls back.
+    """
+    conn = connect_from_env()
+    try:
+        exclude_batches(conn, correction, start, end, reason, apply=apply)
+    finally:
+        conn.close()
+
+
+@task(help={
+    **_CORRECTION_HELP,
+    "error": "Substring of submissions.validation_error to credit",
+    "require_point_within_hours": "Credit a batch only if the BP earned a real point within N hours of it",
+})
+def score_correction_credit_rejected(ctx, correction, start, end, error, reason, apply=False,
+                                     require_point_within_hours=None):
+    """Credit the batches in which a BP's submission was rejected with ERROR and it got no point.
+
+    Dry run by default: prints the score change of every BP, then rolls back.
+    """
+    conn = connect_from_env()
+    try:
+        credit_rejected_submissions(
+            conn, correction, start, end, error, reason, apply=apply,
+            require_point_within_hours=float(require_point_within_hours) if require_point_within_hours else None,
+        )
+    finally:
+        conn.close()
+
+
+@task(help={"correction": _CORRECTION_HELP["correction"], "apply": _CORRECTION_HELP["apply"]})
+def score_correction_revert(ctx, correction, apply=False):
+    """Undo every change recorded under CORRECTION. Dry run by default."""
+    conn = connect_from_env()
+    try:
+        revert_correction(conn, correction, apply=apply)
+    finally:
+        conn.close()
+
+
+@task
+def score_correction_list(ctx):
+    """List every recorded score correction."""
+    conn = connect_from_env()
+    try:
+        list_corrections(conn)
     finally:
         conn.close()

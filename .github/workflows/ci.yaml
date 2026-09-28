@@ -66,3 +66,5 @@ jobs:
         # tasks.py must import the maintenance package (create-database uses it).
         docker run --rm "$IMAGE" invoke --list | grep -E "create-database|add-submissions-index"
         docker run --rm "$IMAGE" python -c "import uptime_service_validation.maintenance.indexes"
+        docker run --rm "$IMAGE" invoke --list | grep score-correction-credit-rejected
+        docker run --rm "$IMAGE" python -c "import uptime_service_validation.maintenance.score_corrections"
