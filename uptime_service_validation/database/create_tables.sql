@@ -103,6 +103,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_submissions_submitter_date ON submissions U
 -- Additional indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_submissions_submitter_date ON submissions (submitter, submitted_at_date);
 CREATE INDEX IF NOT EXISTS idx_submissions_submitter_datetime ON submissions (submitter, submitted_at DESC);
+-- idx_submissions_submitted_at (serves DB.get_submissions' time-range scan) is
+-- deliberately NOT created here: this script runs on every coordinator start
+-- (initContainer -> `invoke create-database`), and a plain CREATE INDEX on the
+-- live submissions table blocks the backend's INSERTs for the whole build.
+-- `invoke create-database` creates it right after this script with
+-- CREATE INDEX CONCURRENTLY (see uptime_service_validation/maintenance/indexes.py).
 
 -- Table creation for points_summary
 -- The points_summary table aggregates data related to node scoring.
@@ -216,10 +222,12 @@ BEGIN
 
   -- Clean up statehash and count rows deleted
   WITH del AS (
+    -- NOT EXISTS, not NOT IN: score-correction credits are points rows with
+    -- statehash_id NULL, and a single NULL makes NOT IN match nothing.
     DELETE FROM statehash
-    WHERE id NOT IN (SELECT DISTINCT statehash_id FROM bot_logs_statehash)
-      AND id NOT IN (SELECT DISTINCT parent_statehash_id FROM bot_logs_statehash)
-      AND id NOT IN (SELECT DISTINCT statehash_id FROM points)
+    WHERE NOT EXISTS (SELECT 1 FROM bot_logs_statehash b WHERE b.statehash_id = statehash.id)
+      AND NOT EXISTS (SELECT 1 FROM bot_logs_statehash b WHERE b.parent_statehash_id = statehash.id)
+      AND NOT EXISTS (SELECT 1 FROM points p WHERE p.statehash_id = statehash.id)
     RETURNING 1
   )
   SELECT COUNT(*) INTO statehash_deleted FROM del;
