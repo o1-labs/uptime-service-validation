@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y \
 COPY . .
 
 # Install any needed packages specified in pyproject.toml and poetry.lock
-RUN pip install poetry
+RUN pip install "poetry==1.8.5"
 RUN poetry config virtualenvs.create false
 RUN poetry install --only main
 
